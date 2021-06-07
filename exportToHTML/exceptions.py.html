@@ -1,0 +1,79 @@
+<html>
+<head>
+<title>exceptions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #cc7832;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+exceptions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">''' 
+Custom exceptions raised by pytz. 
+'''</span>
+
+<span class="s1">__all__ = [</span>
+    <span class="s2">'UnknownTimeZoneError'</span><span class="s3">, </span><span class="s2">'InvalidTimeError'</span><span class="s3">, </span><span class="s2">'AmbiguousTimeError'</span><span class="s3">,</span>
+    <span class="s2">'NonExistentTimeError'</span><span class="s3">,</span>
+<span class="s1">]</span>
+
+
+<span class="s3">class </span><span class="s1">Error(Exception):</span>
+    <span class="s0">'''Base class for all exceptions raised by the pytz library'''</span>
+
+
+<span class="s3">class </span><span class="s1">UnknownTimeZoneError(KeyError</span><span class="s3">, </span><span class="s1">Error):</span>
+    <span class="s0">'''Exception raised when pytz is passed an unknown timezone. 
+ 
+    &gt;&gt;&gt; isinstance(UnknownTimeZoneError(), LookupError) 
+    True 
+ 
+    This class is actually a subclass of KeyError to provide backwards 
+    compatibility with code relying on the undocumented behavior of earlier 
+    pytz releases. 
+ 
+    &gt;&gt;&gt; isinstance(UnknownTimeZoneError(), KeyError) 
+    True 
+ 
+    And also a subclass of pytz.exceptions.Error, as are other pytz 
+    exceptions. 
+ 
+    &gt;&gt;&gt; isinstance(UnknownTimeZoneError(), Error) 
+    True 
+ 
+    '''</span>
+    <span class="s3">pass</span>
+
+
+<span class="s3">class </span><span class="s1">InvalidTimeError(Error):</span>
+    <span class="s0">'''Base class for invalid time exceptions.'''</span>
+
+
+<span class="s3">class </span><span class="s1">AmbiguousTimeError(InvalidTimeError):</span>
+    <span class="s0">'''Exception raised when attempting to create an ambiguous wallclock time. 
+ 
+    At the end of a DST transition period, a particular wallclock time will 
+    occur twice (once before the clocks are set back, once after). Both 
+    possibilities may be correct, unless further information is supplied. 
+ 
+    See DstTzInfo.normalize() for more info 
+    '''</span>
+
+
+<span class="s3">class </span><span class="s1">NonExistentTimeError(InvalidTimeError):</span>
+    <span class="s0">'''Exception raised when attempting to create a wallclock time that 
+    cannot exist. 
+ 
+    At the start of a DST transition period, the wallclock time jumps forward. 
+    The instants jumped over never occur. 
+    '''</span>
+</pre>
+</body>
+</html>

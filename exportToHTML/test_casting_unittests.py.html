@@ -1,0 +1,323 @@
+<html>
+<head>
+<title>test_casting_unittests.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #808080;}
+.s4 { color: #6a8759;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_casting_unittests.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+The tests exercise the casting machinery in a more low-level manner. 
+The reason is mostly to test a new implementation of the casting machinery. 
+ 
+Unlike most tests in NumPy, these are closer to unit-tests rather 
+than integration tests. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">pytest</span>
+<span class="s2">import </span><span class="s1">textwrap</span>
+<span class="s2">import </span><span class="s1">enum</span>
+
+<span class="s2">import </span><span class="s1">numpy </span><span class="s2">as </span><span class="s1">np</span>
+
+<span class="s2">from </span><span class="s1">numpy.core._multiarray_umath </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">_get_castingimpl </span><span class="s2">as </span><span class="s1">get_castingimpl)</span>
+<span class="s2">from </span><span class="s1">numpy.core._multiarray_tests </span><span class="s2">import </span><span class="s1">uses_new_casts</span>
+
+
+<span class="s3"># Simple skips object, parametric and long double (unsupported by struct)</span>
+<span class="s1">simple_dtypes = </span><span class="s4">&quot;?bhilqBHILQefdFD&quot;</span>
+<span class="s2">if </span><span class="s1">np.dtype(</span><span class="s4">&quot;l&quot;</span><span class="s1">).itemsize != np.dtype(</span><span class="s4">&quot;q&quot;</span><span class="s1">).itemsize:</span>
+    <span class="s3"># Remove l and L, the table was generated with 64bit linux in mind.</span>
+    <span class="s3"># TODO: Should have two tables or no a different solution.</span>
+    <span class="s1">simple_dtypes = simple_dtypes.replace(</span><span class="s4">&quot;l&quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s1">).replace(</span><span class="s4">&quot;L&quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+<span class="s1">simple_dtypes = [type(np.dtype(c)) </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">simple_dtypes]</span>
+
+
+<span class="s2">def </span><span class="s1">simple_dtype_instances():</span>
+    <span class="s2">for </span><span class="s1">dtype_class </span><span class="s2">in </span><span class="s1">simple_dtypes:</span>
+        <span class="s1">dt = dtype_class()</span>
+        <span class="s2">yield </span><span class="s1">pytest.param(dt</span><span class="s2">, </span><span class="s1">id=str(dt))</span>
+        <span class="s2">if </span><span class="s1">dt.byteorder != </span><span class="s4">&quot;|&quot;</span><span class="s1">:</span>
+            <span class="s1">dt = dt.newbyteorder()</span>
+            <span class="s2">yield </span><span class="s1">pytest.param(dt</span><span class="s2">, </span><span class="s1">id=str(dt))</span>
+
+
+<span class="s2">def </span><span class="s1">get_expected_stringlength(dtype):</span>
+    <span class="s0">&quot;&quot;&quot;Returns the string length when casting the basic dtypes to strings. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">dtype == np.bool_:</span>
+        <span class="s2">return </span><span class="s5">5</span>
+    <span class="s2">if </span><span class="s1">dtype.kind </span><span class="s2">in </span><span class="s4">&quot;iu&quot;</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">dtype.itemsize == </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s1">length = </span><span class="s5">3</span>
+        <span class="s2">elif </span><span class="s1">dtype.itemsize == </span><span class="s5">2</span><span class="s1">:</span>
+            <span class="s1">length = </span><span class="s5">5</span>
+        <span class="s2">elif </span><span class="s1">dtype.itemsize == </span><span class="s5">4</span><span class="s1">:</span>
+            <span class="s1">length = </span><span class="s5">10</span>
+        <span class="s2">elif </span><span class="s1">dtype.itemsize == </span><span class="s5">8</span><span class="s1">:</span>
+            <span class="s1">length = </span><span class="s5">20</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">AssertionError(</span><span class="s4">f&quot;did not find expected length for </span><span class="s2">{</span><span class="s1">dtype</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">dtype.kind == </span><span class="s4">&quot;i&quot;</span><span class="s1">:</span>
+            <span class="s1">length += </span><span class="s5">1  </span><span class="s3"># adds one character for the sign</span>
+
+        <span class="s2">return </span><span class="s1">length</span>
+
+    <span class="s3"># Note: Can't do dtype comparison for longdouble on windows</span>
+    <span class="s2">if </span><span class="s1">dtype.char == </span><span class="s4">&quot;g&quot;</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s5">48</span>
+    <span class="s2">elif </span><span class="s1">dtype.char == </span><span class="s4">&quot;G&quot;</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s5">48 </span><span class="s1">* </span><span class="s5">2</span>
+    <span class="s2">elif </span><span class="s1">dtype.kind == </span><span class="s4">&quot;f&quot;</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s5">32  </span><span class="s3"># also for half apparently.</span>
+    <span class="s2">elif </span><span class="s1">dtype.kind == </span><span class="s4">&quot;c&quot;</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s5">32 </span><span class="s1">* </span><span class="s5">2</span>
+
+    <span class="s2">raise </span><span class="s1">AssertionError(</span><span class="s4">f&quot;did not find expected length for </span><span class="s2">{</span><span class="s1">dtype</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">Casting(enum.IntEnum):</span>
+    <span class="s1">no = </span><span class="s5">0</span>
+    <span class="s1">equiv = </span><span class="s5">1</span>
+    <span class="s1">safe = </span><span class="s5">2</span>
+    <span class="s1">same_kind = </span><span class="s5">3</span>
+    <span class="s1">unsafe = </span><span class="s5">4</span>
+    <span class="s1">cast_is_view = </span><span class="s5">1 </span><span class="s1">&lt;&lt; </span><span class="s5">16</span>
+
+
+<span class="s2">def </span><span class="s1">_get_cancast_table():</span>
+    <span class="s1">table = textwrap.dedent(</span><span class="s4">&quot;&quot;&quot; 
+        X ? b h i l q B H I L Q e f d g F D G S U V O M m 
+        ? # = = = = = = = = = = = = = = = = = = = = = . = 
+        b . # = = = = . . . . . = = = = = = = = = = = . = 
+        h . ~ # = = = . . . . . ~ = = = = = = = = = = . = 
+        i . ~ ~ # = = . . . . . ~ ~ = = ~ = = = = = = . = 
+        l . ~ ~ ~ # # . . . . . ~ ~ = = ~ = = = = = = . = 
+        q . ~ ~ ~ # # . . . . . ~ ~ = = ~ = = = = = = . = 
+        B . ~ = = = = # = = = = = = = = = = = = = = = . = 
+        H . ~ ~ = = = ~ # = = = ~ = = = = = = = = = = . = 
+        I . ~ ~ ~ = = ~ ~ # = = ~ ~ = = ~ = = = = = = . = 
+        L . ~ ~ ~ ~ ~ ~ ~ ~ # # ~ ~ = = ~ = = = = = = . ~ 
+        Q . ~ ~ ~ ~ ~ ~ ~ ~ # # ~ ~ = = ~ = = = = = = . ~ 
+        e . . . . . . . . . . . # = = = = = = = = = = . . 
+        f . . . . . . . . . . . ~ # = = = = = = = = = . . 
+        d . . . . . . . . . . . ~ ~ # = ~ = = = = = = . . 
+        g . . . . . . . . . . . ~ ~ ~ # ~ ~ = = = = = . . 
+        F . . . . . . . . . . . . . . . # = = = = = = . . 
+        D . . . . . . . . . . . . . . . ~ # = = = = = . . 
+        G . . . . . . . . . . . . . . . ~ ~ # = = = = . . 
+        S . . . . . . . . . . . . . . . . . . # = = = . . 
+        U . . . . . . . . . . . . . . . . . . . # = = . . 
+        V . . . . . . . . . . . . . . . . . . . . # = . . 
+        O . . . . . . . . . . . . . . . . . . . . = # . . 
+        M . . . . . . . . . . . . . . . . . . . . = = # . 
+        m . . . . . . . . . . . . . . . . . . . . = = . # 
+        &quot;&quot;&quot;</span><span class="s1">).strip().split(</span><span class="s4">&quot;</span><span class="s2">\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">dtypes = [type(np.dtype(c)) </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">table[</span><span class="s5">0</span><span class="s1">][</span><span class="s5">2</span><span class="s1">::</span><span class="s5">2</span><span class="s1">]]</span>
+
+    <span class="s1">convert_cast = {</span><span class="s4">&quot;.&quot;</span><span class="s1">: Casting.unsafe</span><span class="s2">, </span><span class="s4">&quot;~&quot;</span><span class="s1">: Casting.same_kind</span><span class="s2">,</span>
+                    <span class="s4">&quot;=&quot;</span><span class="s1">: Casting.safe</span><span class="s2">, </span><span class="s4">&quot;#&quot;</span><span class="s1">: Casting.equiv</span><span class="s2">,</span>
+                    <span class="s4">&quot; &quot;</span><span class="s1">: -</span><span class="s5">1</span><span class="s1">}</span>
+
+    <span class="s1">cancast = {}</span>
+    <span class="s2">for </span><span class="s1">from_dt</span><span class="s2">, </span><span class="s1">row </span><span class="s2">in </span><span class="s1">zip(dtypes</span><span class="s2">, </span><span class="s1">table[</span><span class="s5">1</span><span class="s1">:]):</span>
+        <span class="s1">cancast[from_dt] = {}</span>
+        <span class="s2">for </span><span class="s1">to_dt</span><span class="s2">, </span><span class="s1">c </span><span class="s2">in </span><span class="s1">zip(dtypes</span><span class="s2">, </span><span class="s1">row[</span><span class="s5">2</span><span class="s1">::</span><span class="s5">2</span><span class="s1">]):</span>
+            <span class="s1">cancast[from_dt][to_dt] = convert_cast[c]</span>
+
+    <span class="s2">return </span><span class="s1">cancast</span>
+
+<span class="s1">CAST_TABLE = _get_cancast_table()</span>
+
+
+<span class="s2">class </span><span class="s1">TestChanges:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    These test cases excercise some behaviour changes 
+    &quot;&quot;&quot;</span>
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;string&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;S&quot;</span><span class="s2">, </span><span class="s4">&quot;U&quot;</span><span class="s1">])</span>
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;floating&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;e&quot;</span><span class="s2">, </span><span class="s4">&quot;f&quot;</span><span class="s2">, </span><span class="s4">&quot;d&quot;</span><span class="s2">, </span><span class="s4">&quot;g&quot;</span><span class="s1">])</span>
+    <span class="s2">def </span><span class="s1">test_float_to_string(self</span><span class="s2">, </span><span class="s1">floating</span><span class="s2">, </span><span class="s1">string):</span>
+        <span class="s2">assert </span><span class="s1">np.can_cast(floating</span><span class="s2">, </span><span class="s1">string)</span>
+        <span class="s3"># 100 is long enough to hold any formatted floating</span>
+        <span class="s2">if </span><span class="s1">uses_new_casts():</span>
+            <span class="s2">assert </span><span class="s1">np.can_cast(floating</span><span class="s2">, </span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">string</span><span class="s2">}</span><span class="s4">100&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">assert not </span><span class="s1">np.can_cast(floating</span><span class="s2">, </span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">string</span><span class="s2">}</span><span class="s4">100&quot;</span><span class="s1">)</span>
+            <span class="s2">assert </span><span class="s1">np.can_cast(floating</span><span class="s2">, </span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">string</span><span class="s2">}</span><span class="s4">100&quot;</span><span class="s2">, </span><span class="s1">casting=</span><span class="s4">&quot;same_kind&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">test_to_void(self):</span>
+        <span class="s3"># But in general, we do consider these safe:</span>
+        <span class="s2">assert </span><span class="s1">np.can_cast(</span><span class="s4">&quot;d&quot;</span><span class="s2">, </span><span class="s4">&quot;V&quot;</span><span class="s1">)</span>
+        <span class="s2">assert </span><span class="s1">np.can_cast(</span><span class="s4">&quot;S20&quot;</span><span class="s2">, </span><span class="s4">&quot;V&quot;</span><span class="s1">)</span>
+
+        <span class="s3"># Do not consider it a safe cast if the void is too smaller:</span>
+        <span class="s2">if </span><span class="s1">uses_new_casts():</span>
+            <span class="s2">assert not </span><span class="s1">np.can_cast(</span><span class="s4">&quot;d&quot;</span><span class="s2">, </span><span class="s4">&quot;V1&quot;</span><span class="s1">)</span>
+            <span class="s2">assert not </span><span class="s1">np.can_cast(</span><span class="s4">&quot;S20&quot;</span><span class="s2">, </span><span class="s4">&quot;V1&quot;</span><span class="s1">)</span>
+            <span class="s2">assert not </span><span class="s1">np.can_cast(</span><span class="s4">&quot;U1&quot;</span><span class="s2">, </span><span class="s4">&quot;V1&quot;</span><span class="s1">)</span>
+            <span class="s3"># Structured to unstructured is just like any other:</span>
+            <span class="s2">assert </span><span class="s1">np.can_cast(</span><span class="s4">&quot;d,i&quot;</span><span class="s2">, </span><span class="s4">&quot;V&quot;</span><span class="s2">, </span><span class="s1">casting=</span><span class="s4">&quot;same_kind&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">assert </span><span class="s1">np.can_cast(</span><span class="s4">&quot;d&quot;</span><span class="s2">, </span><span class="s4">&quot;V1&quot;</span><span class="s1">)</span>
+            <span class="s2">assert </span><span class="s1">np.can_cast(</span><span class="s4">&quot;S20&quot;</span><span class="s2">, </span><span class="s4">&quot;V1&quot;</span><span class="s1">)</span>
+            <span class="s2">assert </span><span class="s1">np.can_cast(</span><span class="s4">&quot;U1&quot;</span><span class="s2">, </span><span class="s4">&quot;V1&quot;</span><span class="s1">)</span>
+            <span class="s2">assert not </span><span class="s1">np.can_cast(</span><span class="s4">&quot;d,i&quot;</span><span class="s2">, </span><span class="s4">&quot;V&quot;</span><span class="s2">, </span><span class="s1">casting=</span><span class="s4">&quot;same_kind&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">TestCasting:</span>
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;from_Dt&quot;</span><span class="s2">, </span><span class="s1">simple_dtypes)</span>
+    <span class="s2">def </span><span class="s1">test_simple_cancast(self</span><span class="s2">, </span><span class="s1">from_Dt):</span>
+        <span class="s2">for </span><span class="s1">to_Dt </span><span class="s2">in </span><span class="s1">simple_dtypes:</span>
+            <span class="s1">cast = get_castingimpl(from_Dt</span><span class="s2">, </span><span class="s1">to_Dt)</span>
+
+            <span class="s2">for </span><span class="s1">from_dt </span><span class="s2">in </span><span class="s1">[from_Dt()</span><span class="s2">, </span><span class="s1">from_Dt().newbyteorder()]:</span>
+                <span class="s1">default = cast._resolve_descriptors((from_dt</span><span class="s2">, None</span><span class="s1">))[</span><span class="s5">1</span><span class="s1">][</span><span class="s5">1</span><span class="s1">]</span>
+                <span class="s2">assert </span><span class="s1">default == to_Dt()</span>
+                <span class="s2">del </span><span class="s1">default</span>
+
+                <span class="s2">for </span><span class="s1">to_dt </span><span class="s2">in </span><span class="s1">[to_Dt()</span><span class="s2">, </span><span class="s1">to_Dt().newbyteorder()]:</span>
+                    <span class="s1">casting</span><span class="s2">, </span><span class="s1">(from_res</span><span class="s2">, </span><span class="s1">to_res) = cast._resolve_descriptors(</span>
+                        <span class="s1">(from_dt</span><span class="s2">, </span><span class="s1">to_dt))</span>
+                    <span class="s2">assert</span><span class="s1">(type(from_res) == from_Dt)</span>
+                    <span class="s2">assert</span><span class="s1">(type(to_res) == to_Dt)</span>
+                    <span class="s2">if </span><span class="s1">casting &amp; Casting.cast_is_view:</span>
+                        <span class="s3"># If a view is acceptable, this is &quot;no&quot; casting</span>
+                        <span class="s3"># and byte order must be matching.</span>
+                        <span class="s2">assert </span><span class="s1">casting == Casting.no | Casting.cast_is_view</span>
+                        <span class="s3"># The above table lists this as &quot;equivalent&quot;</span>
+                        <span class="s2">assert </span><span class="s1">Casting.equiv == CAST_TABLE[from_Dt][to_Dt]</span>
+                        <span class="s3"># Note that to_res may not be the same as from_dt</span>
+                        <span class="s2">assert </span><span class="s1">from_res.isnative == to_res.isnative</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s2">if </span><span class="s1">from_Dt == to_Dt:</span>
+                            <span class="s3"># Note that to_res may not be the same as from_dt</span>
+                            <span class="s2">assert </span><span class="s1">from_res.isnative != to_res.isnative</span>
+                        <span class="s2">assert </span><span class="s1">casting == CAST_TABLE[from_Dt][to_Dt]</span>
+
+                    <span class="s2">if </span><span class="s1">from_Dt </span><span class="s2">is </span><span class="s1">to_Dt:</span>
+                        <span class="s2">assert</span><span class="s1">(from_dt </span><span class="s2">is </span><span class="s1">from_res)</span>
+                        <span class="s2">assert</span><span class="s1">(to_dt </span><span class="s2">is </span><span class="s1">to_res)</span>
+
+
+    <span class="s2">def </span><span class="s1">string_with_modified_length(self</span><span class="s2">, </span><span class="s1">dtype</span><span class="s2">, </span><span class="s1">change_length):</span>
+        <span class="s1">fact = </span><span class="s5">1 </span><span class="s2">if </span><span class="s1">dtype.char == </span><span class="s4">&quot;S&quot; </span><span class="s2">else </span><span class="s5">4</span>
+        <span class="s1">length = dtype.itemsize // fact + change_length</span>
+        <span class="s2">return </span><span class="s1">np.dtype(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">dtype.byteorder</span><span class="s2">}{</span><span class="s1">dtype.char</span><span class="s2">}{</span><span class="s1">length</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;other_DT&quot;</span><span class="s2">, </span><span class="s1">simple_dtypes)</span>
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;string_char&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;S&quot;</span><span class="s2">, </span><span class="s4">&quot;U&quot;</span><span class="s1">])</span>
+    <span class="s2">def </span><span class="s1">test_string_cancast(self</span><span class="s2">, </span><span class="s1">other_DT</span><span class="s2">, </span><span class="s1">string_char):</span>
+        <span class="s1">fact = </span><span class="s5">1 </span><span class="s2">if </span><span class="s1">string_char == </span><span class="s4">&quot;S&quot; </span><span class="s2">else </span><span class="s5">4</span>
+
+        <span class="s1">string_DT = type(np.dtype(string_char))</span>
+        <span class="s1">cast = get_castingimpl(other_DT</span><span class="s2">, </span><span class="s1">string_DT)</span>
+
+        <span class="s1">other_dt = other_DT()</span>
+        <span class="s1">expected_length = get_expected_stringlength(other_dt)</span>
+        <span class="s1">string_dt = np.dtype(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">string_char</span><span class="s2">}{</span><span class="s1">expected_length</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+        <span class="s1">safety</span><span class="s2">, </span><span class="s1">(res_other_dt</span><span class="s2">, </span><span class="s1">res_dt) = cast._resolve_descriptors((other_dt</span><span class="s2">, None</span><span class="s1">))</span>
+        <span class="s2">assert </span><span class="s1">res_dt.itemsize == expected_length * fact</span>
+        <span class="s2">assert </span><span class="s1">safety == Casting.safe  </span><span class="s3"># we consider to string casts &quot;safe&quot;</span>
+        <span class="s2">assert </span><span class="s1">isinstance(res_dt</span><span class="s2">, </span><span class="s1">string_DT)</span>
+
+        <span class="s3"># These casts currently implement changing the string length, so</span>
+        <span class="s3"># check the cast-safety for too long/fixed string lengths:</span>
+        <span class="s2">for </span><span class="s1">change_length </span><span class="s2">in </span><span class="s1">[-</span><span class="s5">1</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s1">]:</span>
+            <span class="s2">if </span><span class="s1">change_length &gt;= </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s1">expected_safety = Casting.safe</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">expected_safety = Casting.same_kind</span>
+
+            <span class="s1">to_dt = self.string_with_modified_length(string_dt</span><span class="s2">, </span><span class="s1">change_length)</span>
+            <span class="s1">safety</span><span class="s2">, </span><span class="s1">(_</span><span class="s2">, </span><span class="s1">res_dt) = cast._resolve_descriptors((other_dt</span><span class="s2">, </span><span class="s1">to_dt))</span>
+            <span class="s2">assert </span><span class="s1">res_dt </span><span class="s2">is </span><span class="s1">to_dt</span>
+            <span class="s2">assert </span><span class="s1">safety == expected_safety</span>
+
+        <span class="s3"># The opposite direction is always considered unsafe:</span>
+        <span class="s1">cast = get_castingimpl(string_DT</span><span class="s2">, </span><span class="s1">other_DT)</span>
+
+        <span class="s1">safety</span><span class="s2">, </span><span class="s1">_ = cast._resolve_descriptors((string_dt</span><span class="s2">, </span><span class="s1">other_dt))</span>
+        <span class="s2">assert </span><span class="s1">safety == Casting.unsafe</span>
+
+        <span class="s1">cast = get_castingimpl(string_DT</span><span class="s2">, </span><span class="s1">other_DT)</span>
+        <span class="s1">safety</span><span class="s2">, </span><span class="s1">(_</span><span class="s2">, </span><span class="s1">res_dt) = cast._resolve_descriptors((string_dt</span><span class="s2">, None</span><span class="s1">))</span>
+        <span class="s2">assert </span><span class="s1">safety == Casting.unsafe</span>
+        <span class="s2">assert </span><span class="s1">other_dt </span><span class="s2">is </span><span class="s1">res_dt  </span><span class="s3"># returns the singleton for simple dtypes</span>
+
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;other_dt&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;S8&quot;</span><span class="s2">, </span><span class="s4">&quot;&lt;U8&quot;</span><span class="s2">, </span><span class="s4">&quot;&gt;U8&quot;</span><span class="s1">])</span>
+    <span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;string_char&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;S&quot;</span><span class="s2">, </span><span class="s4">&quot;U&quot;</span><span class="s1">])</span>
+    <span class="s2">def </span><span class="s1">test_string_to_string_cancast(self</span><span class="s2">, </span><span class="s1">other_dt</span><span class="s2">, </span><span class="s1">string_char):</span>
+        <span class="s1">other_dt = np.dtype(other_dt)</span>
+
+        <span class="s1">fact = </span><span class="s5">1 </span><span class="s2">if </span><span class="s1">string_char == </span><span class="s4">&quot;S&quot; </span><span class="s2">else </span><span class="s5">4</span>
+        <span class="s1">div = </span><span class="s5">1 </span><span class="s2">if </span><span class="s1">other_dt.char == </span><span class="s4">&quot;S&quot; </span><span class="s2">else </span><span class="s5">4</span>
+
+        <span class="s1">string_DT = type(np.dtype(string_char))</span>
+        <span class="s1">cast = get_castingimpl(type(other_dt)</span><span class="s2">, </span><span class="s1">string_DT)</span>
+
+        <span class="s1">expected_length = other_dt.itemsize // div</span>
+        <span class="s1">string_dt = np.dtype(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">string_char</span><span class="s2">}{</span><span class="s1">expected_length</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+        <span class="s1">safety</span><span class="s2">, </span><span class="s1">(res_other_dt</span><span class="s2">, </span><span class="s1">res_dt) = cast._resolve_descriptors((other_dt</span><span class="s2">, None</span><span class="s1">))</span>
+        <span class="s2">assert </span><span class="s1">res_dt.itemsize == expected_length * fact</span>
+        <span class="s2">assert </span><span class="s1">isinstance(res_dt</span><span class="s2">, </span><span class="s1">string_DT)</span>
+
+        <span class="s2">if </span><span class="s1">other_dt.char == string_char:</span>
+            <span class="s2">if </span><span class="s1">other_dt.isnative:</span>
+                <span class="s1">expected_safety = Casting.no | Casting.cast_is_view</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">expected_safety = Casting.equiv</span>
+        <span class="s2">elif </span><span class="s1">string_char == </span><span class="s4">&quot;U&quot;</span><span class="s1">:</span>
+            <span class="s1">expected_safety = Casting.safe</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">expected_safety = Casting.unsafe</span>
+
+        <span class="s2">assert </span><span class="s1">expected_safety == safety</span>
+
+        <span class="s2">for </span><span class="s1">change_length </span><span class="s2">in </span><span class="s1">[-</span><span class="s5">1</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s1">]:</span>
+            <span class="s1">to_dt = self.string_with_modified_length(string_dt</span><span class="s2">, </span><span class="s1">change_length)</span>
+            <span class="s1">safety</span><span class="s2">, </span><span class="s1">(_</span><span class="s2">, </span><span class="s1">res_dt) = cast._resolve_descriptors((other_dt</span><span class="s2">, </span><span class="s1">to_dt))</span>
+
+            <span class="s2">assert </span><span class="s1">res_dt </span><span class="s2">is </span><span class="s1">to_dt</span>
+            <span class="s2">if </span><span class="s1">expected_safety == Casting.unsafe:</span>
+                <span class="s2">assert </span><span class="s1">safety == expected_safety</span>
+            <span class="s2">elif </span><span class="s1">change_length &lt; </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s2">assert </span><span class="s1">safety == Casting.same_kind</span>
+            <span class="s2">elif </span><span class="s1">change_length == </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s2">assert </span><span class="s1">safety == expected_safety</span>
+            <span class="s2">elif </span><span class="s1">change_length &gt; </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s2">assert </span><span class="s1">safety == Casting.safe</span>
+
+    <span class="s2">def </span><span class="s1">test_void_to_string_special_case(self):</span>
+        <span class="s3"># Cover a small special case in void to string casting that could</span>
+        <span class="s3"># probably just as well be turned into an error (compare</span>
+        <span class="s3"># `test_object_to_parametric_internal_error` below).</span>
+        <span class="s2">assert </span><span class="s1">np.array([]</span><span class="s2">, </span><span class="s1">dtype=</span><span class="s4">&quot;V5&quot;</span><span class="s1">).astype(</span><span class="s4">&quot;S&quot;</span><span class="s1">).dtype.itemsize == </span><span class="s5">5</span>
+        <span class="s2">assert </span><span class="s1">np.array([]</span><span class="s2">, </span><span class="s1">dtype=</span><span class="s4">&quot;V5&quot;</span><span class="s1">).astype(</span><span class="s4">&quot;U&quot;</span><span class="s1">).dtype.itemsize == </span><span class="s5">4 </span><span class="s1">* </span><span class="s5">5</span>
+
+    <span class="s2">def </span><span class="s1">test_object_to_parametric_internal_error(self):</span>
+        <span class="s3"># We reject casting from object to a parametric type, without</span>
+        <span class="s3"># figuring out the correct instance first.</span>
+        <span class="s1">object_dtype = type(np.dtype(object))</span>
+        <span class="s1">other_dtype = type(np.dtype(str))</span>
+        <span class="s1">cast = get_castingimpl(object_dtype</span><span class="s2">, </span><span class="s1">other_dtype)</span>
+        <span class="s2">with </span><span class="s1">pytest.raises(TypeError</span><span class="s2">,</span>
+                    <span class="s1">match=</span><span class="s4">&quot;casting from object to the parametric DType&quot;</span><span class="s1">):</span>
+            <span class="s1">cast._resolve_descriptors((np.dtype(</span><span class="s4">&quot;O&quot;</span><span class="s1">)</span><span class="s2">, None</span><span class="s1">))</span>
+</pre>
+</body>
+</html>

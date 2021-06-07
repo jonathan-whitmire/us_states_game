@@ -1,0 +1,2835 @@
+<html>
+<head>
+<title>linalg.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #cc7832;}
+.s4 { color: #6897bb;}
+.s5 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+linalg.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Lite version of scipy.linalg. 
+ 
+Notes 
+----- 
+This module is a lite version of the linalg.py module in SciPy which 
+contains high-level Python interface to the LAPACK library.  The lite 
+version only accesses the following LAPACK functions: dgesv, zgesv, 
+dgeev, zgeev, dgesdd, zgesdd, dgelsd, zgelsd, dsyevd, zheevd, dgetrf, 
+zgetrf, dpotrf, zpotrf, dgeqrf, zgeqrf, zungqr, dorgqr. 
+&quot;&quot;&quot;</span>
+
+<span class="s1">__all__ = [</span><span class="s2">'matrix_power'</span><span class="s3">, </span><span class="s2">'solve'</span><span class="s3">, </span><span class="s2">'tensorsolve'</span><span class="s3">, </span><span class="s2">'tensorinv'</span><span class="s3">, </span><span class="s2">'inv'</span><span class="s3">,</span>
+           <span class="s2">'cholesky'</span><span class="s3">, </span><span class="s2">'eigvals'</span><span class="s3">, </span><span class="s2">'eigvalsh'</span><span class="s3">, </span><span class="s2">'pinv'</span><span class="s3">, </span><span class="s2">'slogdet'</span><span class="s3">, </span><span class="s2">'det'</span><span class="s3">,</span>
+           <span class="s2">'svd'</span><span class="s3">, </span><span class="s2">'eig'</span><span class="s3">, </span><span class="s2">'eigh'</span><span class="s3">, </span><span class="s2">'lstsq'</span><span class="s3">, </span><span class="s2">'norm'</span><span class="s3">, </span><span class="s2">'qr'</span><span class="s3">, </span><span class="s2">'cond'</span><span class="s3">, </span><span class="s2">'matrix_rank'</span><span class="s3">,</span>
+           <span class="s2">'LinAlgError'</span><span class="s3">, </span><span class="s2">'multi_dot'</span><span class="s1">]</span>
+
+<span class="s3">import </span><span class="s1">functools</span>
+<span class="s3">import </span><span class="s1">operator</span>
+<span class="s3">import </span><span class="s1">warnings</span>
+
+<span class="s3">from </span><span class="s1">numpy.core </span><span class="s3">import </span><span class="s1">(</span>
+    <span class="s1">array</span><span class="s3">, </span><span class="s1">asarray</span><span class="s3">, </span><span class="s1">zeros</span><span class="s3">, </span><span class="s1">empty</span><span class="s3">, </span><span class="s1">empty_like</span><span class="s3">, </span><span class="s1">intc</span><span class="s3">, </span><span class="s1">single</span><span class="s3">, </span><span class="s1">double</span><span class="s3">,</span>
+    <span class="s1">csingle</span><span class="s3">, </span><span class="s1">cdouble</span><span class="s3">, </span><span class="s1">inexact</span><span class="s3">, </span><span class="s1">complexfloating</span><span class="s3">, </span><span class="s1">newaxis</span><span class="s3">, </span><span class="s1">all</span><span class="s3">, </span><span class="s1">Inf</span><span class="s3">, </span><span class="s1">dot</span><span class="s3">,</span>
+    <span class="s1">add</span><span class="s3">, </span><span class="s1">multiply</span><span class="s3">, </span><span class="s1">sqrt</span><span class="s3">, </span><span class="s1">fastCopyAndTranspose</span><span class="s3">, </span><span class="s1">sum</span><span class="s3">, </span><span class="s1">isfinite</span><span class="s3">,</span>
+    <span class="s1">finfo</span><span class="s3">, </span><span class="s1">errstate</span><span class="s3">, </span><span class="s1">geterrobj</span><span class="s3">, </span><span class="s1">moveaxis</span><span class="s3">, </span><span class="s1">amin</span><span class="s3">, </span><span class="s1">amax</span><span class="s3">, </span><span class="s1">product</span><span class="s3">, </span><span class="s1">abs</span><span class="s3">,</span>
+    <span class="s1">atleast_2d</span><span class="s3">, </span><span class="s1">intp</span><span class="s3">, </span><span class="s1">asanyarray</span><span class="s3">, </span><span class="s1">object_</span><span class="s3">, </span><span class="s1">matmul</span><span class="s3">,</span>
+    <span class="s1">swapaxes</span><span class="s3">, </span><span class="s1">divide</span><span class="s3">, </span><span class="s1">count_nonzero</span><span class="s3">, </span><span class="s1">isnan</span><span class="s3">, </span><span class="s1">sign</span><span class="s3">, </span><span class="s1">argsort</span><span class="s3">, </span><span class="s1">sort</span>
+<span class="s1">)</span>
+<span class="s3">from </span><span class="s1">numpy.core.multiarray </span><span class="s3">import </span><span class="s1">normalize_axis_index</span>
+<span class="s3">from </span><span class="s1">numpy.core.overrides </span><span class="s3">import </span><span class="s1">set_module</span>
+<span class="s3">from </span><span class="s1">numpy.core </span><span class="s3">import </span><span class="s1">overrides</span>
+<span class="s3">from </span><span class="s1">numpy.lib.twodim_base </span><span class="s3">import </span><span class="s1">triu</span><span class="s3">, </span><span class="s1">eye</span>
+<span class="s3">from </span><span class="s1">numpy.linalg </span><span class="s3">import </span><span class="s1">lapack_lite</span><span class="s3">, </span><span class="s1">_umath_linalg</span>
+
+
+<span class="s1">array_function_dispatch = functools.partial(</span>
+    <span class="s1">overrides.array_function_dispatch</span><span class="s3">, </span><span class="s1">module=</span><span class="s2">'numpy.linalg'</span><span class="s1">)</span>
+
+
+<span class="s1">fortran_int = intc</span>
+
+
+<span class="s1">@set_module(</span><span class="s2">'numpy.linalg'</span><span class="s1">)</span>
+<span class="s3">class </span><span class="s1">LinAlgError(Exception):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Generic Python-exception-derived object raised by linalg functions. 
+ 
+    General purpose exception class, derived from Python's exception.Exception 
+    class, programmatically raised in linalg functions when a Linear 
+    Algebra-related condition would prevent further correct execution of the 
+    function. 
+ 
+    Parameters 
+    ---------- 
+    None 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+    &gt;&gt;&gt; LA.inv(np.zeros((2,2))) 
+    Traceback (most recent call last): 
+      File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt; 
+      File &quot;...linalg.py&quot;, line 350, 
+        in inv return wrap(solve(a, identity(a.shape[0], dtype=a.dtype))) 
+      File &quot;...linalg.py&quot;, line 249, 
+        in solve 
+        raise LinAlgError('Singular matrix') 
+    numpy.linalg.LinAlgError: Singular matrix 
+ 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s3">def </span><span class="s1">_determine_error_states():</span>
+    <span class="s1">errobj = geterrobj()</span>
+    <span class="s1">bufsize = errobj[</span><span class="s4">0</span><span class="s1">]</span>
+
+    <span class="s3">with </span><span class="s1">errstate(invalid=</span><span class="s2">'call'</span><span class="s3">, </span><span class="s1">over=</span><span class="s2">'ignore'</span><span class="s3">,</span>
+                  <span class="s1">divide=</span><span class="s2">'ignore'</span><span class="s3">, </span><span class="s1">under=</span><span class="s2">'ignore'</span><span class="s1">):</span>
+        <span class="s1">invalid_call_errmask = geterrobj()[</span><span class="s4">1</span><span class="s1">]</span>
+
+    <span class="s3">return </span><span class="s1">[bufsize</span><span class="s3">, </span><span class="s1">invalid_call_errmask</span><span class="s3">, None</span><span class="s1">]</span>
+
+<span class="s5"># Dealing with errors in _umath_linalg</span>
+<span class="s1">_linalg_error_extobj = _determine_error_states()</span>
+<span class="s3">del </span><span class="s1">_determine_error_states</span>
+
+<span class="s3">def </span><span class="s1">_raise_linalgerror_singular(err</span><span class="s3">, </span><span class="s1">flag):</span>
+    <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;Singular matrix&quot;</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_raise_linalgerror_nonposdef(err</span><span class="s3">, </span><span class="s1">flag):</span>
+    <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;Matrix is not positive definite&quot;</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_raise_linalgerror_eigenvalues_nonconvergence(err</span><span class="s3">, </span><span class="s1">flag):</span>
+    <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;Eigenvalues did not converge&quot;</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_raise_linalgerror_svd_nonconvergence(err</span><span class="s3">, </span><span class="s1">flag):</span>
+    <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;SVD did not converge&quot;</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_raise_linalgerror_lstsq(err</span><span class="s3">, </span><span class="s1">flag):</span>
+    <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;SVD did not converge in Linear Least Squares&quot;</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">get_linalg_error_extobj(callback):</span>
+    <span class="s1">extobj = list(_linalg_error_extobj)  </span><span class="s5"># make a copy</span>
+    <span class="s1">extobj[</span><span class="s4">2</span><span class="s1">] = callback</span>
+    <span class="s3">return </span><span class="s1">extobj</span>
+
+<span class="s3">def </span><span class="s1">_makearray(a):</span>
+    <span class="s1">new = asarray(a)</span>
+    <span class="s1">wrap = getattr(a</span><span class="s3">, </span><span class="s2">&quot;__array_prepare__&quot;</span><span class="s3">, </span><span class="s1">new.__array_wrap__)</span>
+    <span class="s3">return </span><span class="s1">new</span><span class="s3">, </span><span class="s1">wrap</span>
+
+<span class="s3">def </span><span class="s1">isComplexType(t):</span>
+    <span class="s3">return </span><span class="s1">issubclass(t</span><span class="s3">, </span><span class="s1">complexfloating)</span>
+
+<span class="s1">_real_types_map = {single : single</span><span class="s3">,</span>
+                   <span class="s1">double : double</span><span class="s3">,</span>
+                   <span class="s1">csingle : single</span><span class="s3">,</span>
+                   <span class="s1">cdouble : double}</span>
+
+<span class="s1">_complex_types_map = {single : csingle</span><span class="s3">,</span>
+                      <span class="s1">double : cdouble</span><span class="s3">,</span>
+                      <span class="s1">csingle : csingle</span><span class="s3">,</span>
+                      <span class="s1">cdouble : cdouble}</span>
+
+<span class="s3">def </span><span class="s1">_realType(t</span><span class="s3">, </span><span class="s1">default=double):</span>
+    <span class="s3">return </span><span class="s1">_real_types_map.get(t</span><span class="s3">, </span><span class="s1">default)</span>
+
+<span class="s3">def </span><span class="s1">_complexType(t</span><span class="s3">, </span><span class="s1">default=cdouble):</span>
+    <span class="s3">return </span><span class="s1">_complex_types_map.get(t</span><span class="s3">, </span><span class="s1">default)</span>
+
+<span class="s3">def </span><span class="s1">_linalgRealType(t):</span>
+    <span class="s0">&quot;&quot;&quot;Cast the type t to either double or cdouble.&quot;&quot;&quot;</span>
+    <span class="s3">return </span><span class="s1">double</span>
+
+<span class="s3">def </span><span class="s1">_commonType(*arrays):</span>
+    <span class="s5"># in lite version, use higher precision (always double or cdouble)</span>
+    <span class="s1">result_type = single</span>
+    <span class="s1">is_complex = </span><span class="s3">False</span>
+    <span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s3">if </span><span class="s1">issubclass(a.dtype.type</span><span class="s3">, </span><span class="s1">inexact):</span>
+            <span class="s3">if </span><span class="s1">isComplexType(a.dtype.type):</span>
+                <span class="s1">is_complex = </span><span class="s3">True</span>
+            <span class="s1">rt = _realType(a.dtype.type</span><span class="s3">, </span><span class="s1">default=</span><span class="s3">None</span><span class="s1">)</span>
+            <span class="s3">if </span><span class="s1">rt </span><span class="s3">is None</span><span class="s1">:</span>
+                <span class="s5"># unsupported inexact scalar</span>
+                <span class="s3">raise </span><span class="s1">TypeError(</span><span class="s2">&quot;array type %s is unsupported in linalg&quot; </span><span class="s1">%</span>
+                        <span class="s1">(a.dtype.name</span><span class="s3">,</span><span class="s1">))</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s1">rt = double</span>
+        <span class="s3">if </span><span class="s1">rt </span><span class="s3">is </span><span class="s1">double:</span>
+            <span class="s1">result_type = double</span>
+    <span class="s3">if </span><span class="s1">is_complex:</span>
+        <span class="s1">t = cdouble</span>
+        <span class="s1">result_type = _complex_types_map[result_type]</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">t = double</span>
+    <span class="s3">return </span><span class="s1">t</span><span class="s3">, </span><span class="s1">result_type</span>
+
+
+<span class="s5"># _fastCopyAndTranpose assumes the input is 2D (as all the calls in here are).</span>
+
+<span class="s1">_fastCT = fastCopyAndTranspose</span>
+
+<span class="s3">def </span><span class="s1">_to_native_byte_order(*arrays):</span>
+    <span class="s1">ret = []</span>
+    <span class="s3">for </span><span class="s1">arr </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s3">if </span><span class="s1">arr.dtype.byteorder </span><span class="s3">not in </span><span class="s1">(</span><span class="s2">'='</span><span class="s3">, </span><span class="s2">'|'</span><span class="s1">):</span>
+            <span class="s1">ret.append(asarray(arr</span><span class="s3">, </span><span class="s1">dtype=arr.dtype.newbyteorder(</span><span class="s2">'='</span><span class="s1">)))</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s1">ret.append(arr)</span>
+    <span class="s3">if </span><span class="s1">len(ret) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">ret[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">ret</span>
+
+<span class="s3">def </span><span class="s1">_fastCopyAndTranspose(type</span><span class="s3">, </span><span class="s1">*arrays):</span>
+    <span class="s1">cast_arrays = ()</span>
+    <span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s3">if </span><span class="s1">a.dtype.type </span><span class="s3">is not </span><span class="s1">type:</span>
+            <span class="s1">a = a.astype(type)</span>
+        <span class="s1">cast_arrays = cast_arrays + (_fastCT(a)</span><span class="s3">,</span><span class="s1">)</span>
+    <span class="s3">if </span><span class="s1">len(cast_arrays) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">cast_arrays[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">cast_arrays</span>
+
+<span class="s3">def </span><span class="s1">_assert_2d(*arrays):</span>
+    <span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s3">if </span><span class="s1">a.ndim != </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'%d-dimensional array given. Array must be '</span>
+                    <span class="s2">'two-dimensional' </span><span class="s1">% a.ndim)</span>
+
+<span class="s3">def </span><span class="s1">_assert_stacked_2d(*arrays):</span>
+    <span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s3">if </span><span class="s1">a.ndim &lt; </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'%d-dimensional array given. Array must be '</span>
+                    <span class="s2">'at least two-dimensional' </span><span class="s1">% a.ndim)</span>
+
+<span class="s3">def </span><span class="s1">_assert_stacked_square(*arrays):</span>
+    <span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s1">m</span><span class="s3">, </span><span class="s1">n = a.shape[-</span><span class="s4">2</span><span class="s1">:]</span>
+        <span class="s3">if </span><span class="s1">m != n:</span>
+            <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'Last 2 dimensions of the array must be square'</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_assert_finite(*arrays):</span>
+    <span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays:</span>
+        <span class="s3">if not </span><span class="s1">isfinite(a).all():</span>
+            <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;Array must not contain infs or NaNs&quot;</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_is_empty_2d(arr):</span>
+    <span class="s5"># check size first for efficiency</span>
+    <span class="s3">return </span><span class="s1">arr.size == </span><span class="s4">0 </span><span class="s3">and </span><span class="s1">product(arr.shape[-</span><span class="s4">2</span><span class="s1">:]) == </span><span class="s4">0</span>
+
+
+<span class="s3">def </span><span class="s1">transpose(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Transpose each matrix in a stack of matrices. 
+ 
+    Unlike np.transpose, this only swaps the last two axes, rather than all of 
+    them 
+ 
+    Parameters 
+    ---------- 
+    a : (...,M,N) array_like 
+ 
+    Returns 
+    ------- 
+    aT : (...,N,M) ndarray 
+    &quot;&quot;&quot;</span>
+    <span class="s3">return </span><span class="s1">swapaxes(a</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s3">, </span><span class="s1">-</span><span class="s4">2</span><span class="s1">)</span>
+
+<span class="s5"># Linear equations</span>
+
+<span class="s3">def </span><span class="s1">_tensorsolve_dispatcher(a</span><span class="s3">, </span><span class="s1">b</span><span class="s3">, </span><span class="s1">axes=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">, </span><span class="s1">b)</span>
+
+
+<span class="s1">@array_function_dispatch(_tensorsolve_dispatcher)</span>
+<span class="s3">def </span><span class="s1">tensorsolve(a</span><span class="s3">, </span><span class="s1">b</span><span class="s3">, </span><span class="s1">axes=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Solve the tensor equation ``a x = b`` for x. 
+ 
+    It is assumed that all indices of `x` are summed over in the product, 
+    together with the rightmost indices of `a`, as is done in, for example, 
+    ``tensordot(a, x, axes=b.ndim)``. 
+ 
+    Parameters 
+    ---------- 
+    a : array_like 
+        Coefficient tensor, of shape ``b.shape + Q``. `Q`, a tuple, equals 
+        the shape of that sub-tensor of `a` consisting of the appropriate 
+        number of its rightmost indices, and must be such that 
+        ``prod(Q) == prod(b.shape)`` (in which sense `a` is said to be 
+        'square'). 
+    b : array_like 
+        Right-hand tensor, which can be of any shape. 
+    axes : tuple of ints, optional 
+        Axes in `a` to reorder to the right, before inversion. 
+        If None (default), no reordering is done. 
+ 
+    Returns 
+    ------- 
+    x : ndarray, shape Q 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If `a` is singular or not 'square' (in the above sense). 
+ 
+    See Also 
+    -------- 
+    numpy.tensordot, tensorinv, numpy.einsum 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; a = np.eye(2*3*4) 
+    &gt;&gt;&gt; a.shape = (2*3, 4, 2, 3, 4) 
+    &gt;&gt;&gt; b = np.random.randn(2*3, 4) 
+    &gt;&gt;&gt; x = np.linalg.tensorsolve(a, b) 
+    &gt;&gt;&gt; x.shape 
+    (2, 3, 4) 
+    &gt;&gt;&gt; np.allclose(np.tensordot(a, x, axes=3), b) 
+    True 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">b = asarray(b)</span>
+    <span class="s1">an = a.ndim</span>
+
+    <span class="s3">if </span><span class="s1">axes </span><span class="s3">is not None</span><span class="s1">:</span>
+        <span class="s1">allaxes = list(range(</span><span class="s4">0</span><span class="s3">, </span><span class="s1">an))</span>
+        <span class="s3">for </span><span class="s1">k </span><span class="s3">in </span><span class="s1">axes:</span>
+            <span class="s1">allaxes.remove(k)</span>
+            <span class="s1">allaxes.insert(an</span><span class="s3">, </span><span class="s1">k)</span>
+        <span class="s1">a = a.transpose(allaxes)</span>
+
+    <span class="s1">oldshape = a.shape[-(an-b.ndim):]</span>
+    <span class="s1">prod = </span><span class="s4">1</span>
+    <span class="s3">for </span><span class="s1">k </span><span class="s3">in </span><span class="s1">oldshape:</span>
+        <span class="s1">prod *= k</span>
+
+    <span class="s1">a = a.reshape(-</span><span class="s4">1</span><span class="s3">, </span><span class="s1">prod)</span>
+    <span class="s1">b = b.ravel()</span>
+    <span class="s1">res = wrap(solve(a</span><span class="s3">, </span><span class="s1">b))</span>
+    <span class="s1">res.shape = oldshape</span>
+    <span class="s3">return </span><span class="s1">res</span>
+
+
+<span class="s3">def </span><span class="s1">_solve_dispatcher(a</span><span class="s3">, </span><span class="s1">b):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">, </span><span class="s1">b)</span>
+
+
+<span class="s1">@array_function_dispatch(_solve_dispatcher)</span>
+<span class="s3">def </span><span class="s1">solve(a</span><span class="s3">, </span><span class="s1">b):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Solve a linear matrix equation, or system of linear scalar equations. 
+ 
+    Computes the &quot;exact&quot; solution, `x`, of the well-determined, i.e., full 
+    rank, linear matrix equation `ax = b`. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        Coefficient matrix. 
+    b : {(..., M,), (..., M, K)}, array_like 
+        Ordinate or &quot;dependent variable&quot; values. 
+ 
+    Returns 
+    ------- 
+    x : {(..., M,), (..., M, K)} ndarray 
+        Solution to the system a x = b.  Returned shape is identical to `b`. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If `a` is singular or not square. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.solve : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    The solutions are computed using LAPACK routine ``_gesv``. 
+ 
+    `a` must be square and of full-rank, i.e., all rows (or, equivalently, 
+    columns) must be linearly independent; if either is not true, use 
+    `lstsq` for the least-squares best &quot;solution&quot; of the 
+    system/equation. 
+ 
+    References 
+    ---------- 
+    .. [1] G. Strang, *Linear Algebra and Its Applications*, 2nd Ed., Orlando, 
+           FL, Academic Press, Inc., 1980, pg. 22. 
+ 
+    Examples 
+    -------- 
+    Solve the system of equations ``x0 + 2 * x1 = 1`` and ``3 * x0 + 5 * x1 = 2``: 
+ 
+    &gt;&gt;&gt; a = np.array([[1, 2], [3, 5]]) 
+    &gt;&gt;&gt; b = np.array([1, 2]) 
+    &gt;&gt;&gt; x = np.linalg.solve(a, b) 
+    &gt;&gt;&gt; x 
+    array([-1.,  1.]) 
+ 
+    Check that the solution is correct: 
+ 
+    &gt;&gt;&gt; np.allclose(np.dot(a, x), b) 
+    True 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">_ = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">b</span><span class="s3">, </span><span class="s1">wrap = _makearray(b)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a</span><span class="s3">, </span><span class="s1">b)</span>
+
+    <span class="s5"># We use the b = (..., M,) logic, only if the number of extra dimensions</span>
+    <span class="s5"># match exactly</span>
+    <span class="s3">if </span><span class="s1">b.ndim == a.ndim - </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.solve1</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.solve</span>
+
+    <span class="s1">signature = </span><span class="s2">'DD-&gt;D' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'dd-&gt;d'</span>
+    <span class="s1">extobj = get_linalg_error_extobj(_raise_linalgerror_singular)</span>
+    <span class="s1">r = gufunc(a</span><span class="s3">, </span><span class="s1">b</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+
+    <span class="s3">return </span><span class="s1">wrap(r.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">))</span>
+
+
+<span class="s3">def </span><span class="s1">_tensorinv_dispatcher(a</span><span class="s3">, </span><span class="s1">ind=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_tensorinv_dispatcher)</span>
+<span class="s3">def </span><span class="s1">tensorinv(a</span><span class="s3">, </span><span class="s1">ind=</span><span class="s4">2</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the 'inverse' of an N-dimensional array. 
+ 
+    The result is an inverse for `a` relative to the tensordot operation 
+    ``tensordot(a, b, ind)``, i. e., up to floating-point accuracy, 
+    ``tensordot(tensorinv(a), a, ind)`` is the &quot;identity&quot; tensor for the 
+    tensordot operation. 
+ 
+    Parameters 
+    ---------- 
+    a : array_like 
+        Tensor to 'invert'. Its shape must be 'square', i. e., 
+        ``prod(a.shape[:ind]) == prod(a.shape[ind:])``. 
+    ind : int, optional 
+        Number of first indices that are involved in the inverse sum. 
+        Must be a positive integer, default is 2. 
+ 
+    Returns 
+    ------- 
+    b : ndarray 
+        `a`'s tensordot inverse, shape ``a.shape[ind:] + a.shape[:ind]``. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If `a` is singular or not 'square' (in the above sense). 
+ 
+    See Also 
+    -------- 
+    numpy.tensordot, tensorsolve 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; a = np.eye(4*6) 
+    &gt;&gt;&gt; a.shape = (4, 6, 8, 3) 
+    &gt;&gt;&gt; ainv = np.linalg.tensorinv(a, ind=2) 
+    &gt;&gt;&gt; ainv.shape 
+    (8, 3, 4, 6) 
+    &gt;&gt;&gt; b = np.random.randn(4, 6) 
+    &gt;&gt;&gt; np.allclose(np.tensordot(ainv, b), np.linalg.tensorsolve(a, b)) 
+    True 
+ 
+    &gt;&gt;&gt; a = np.eye(4*6) 
+    &gt;&gt;&gt; a.shape = (24, 8, 3) 
+    &gt;&gt;&gt; ainv = np.linalg.tensorinv(a, ind=1) 
+    &gt;&gt;&gt; ainv.shape 
+    (8, 3, 24) 
+    &gt;&gt;&gt; b = np.random.randn(24) 
+    &gt;&gt;&gt; np.allclose(np.tensordot(ainv, b, 1), np.linalg.tensorsolve(a, b)) 
+    True 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a = asarray(a)</span>
+    <span class="s1">oldshape = a.shape</span>
+    <span class="s1">prod = </span><span class="s4">1</span>
+    <span class="s3">if </span><span class="s1">ind &gt; </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">invshape = oldshape[ind:] + oldshape[:ind]</span>
+        <span class="s3">for </span><span class="s1">k </span><span class="s3">in </span><span class="s1">oldshape[ind:]:</span>
+            <span class="s1">prod *= k</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;Invalid ind argument.&quot;</span><span class="s1">)</span>
+    <span class="s1">a = a.reshape(prod</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">)</span>
+    <span class="s1">ia = inv(a)</span>
+    <span class="s3">return </span><span class="s1">ia.reshape(*invshape)</span>
+
+
+<span class="s5"># Matrix inversion</span>
+
+<span class="s3">def </span><span class="s1">_unary_dispatcher(a):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_unary_dispatcher)</span>
+<span class="s3">def </span><span class="s1">inv(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the (multiplicative) inverse of a matrix. 
+ 
+    Given a square matrix `a`, return the matrix `ainv` satisfying 
+    ``dot(a, ainv) = dot(ainv, a) = eye(a.shape[0])``. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        Matrix to be inverted. 
+ 
+    Returns 
+    ------- 
+    ainv : (..., M, M) ndarray or matrix 
+        (Multiplicative) inverse of the matrix `a`. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If `a` is not square or inversion fails. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.inv : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy.linalg import inv 
+    &gt;&gt;&gt; a = np.array([[1., 2.], [3., 4.]]) 
+    &gt;&gt;&gt; ainv = inv(a) 
+    &gt;&gt;&gt; np.allclose(np.dot(a, ainv), np.eye(2)) 
+    True 
+    &gt;&gt;&gt; np.allclose(np.dot(ainv, a), np.eye(2)) 
+    True 
+ 
+    If a is a matrix object, then the return value is a matrix as well: 
+ 
+    &gt;&gt;&gt; ainv = inv(np.matrix(a)) 
+    &gt;&gt;&gt; ainv 
+    matrix([[-2. ,  1. ], 
+            [ 1.5, -0.5]]) 
+ 
+    Inverses of several matrices can be computed at once: 
+ 
+    &gt;&gt;&gt; a = np.array([[[1., 2.], [3., 4.]], [[1, 3], [3, 5]]]) 
+    &gt;&gt;&gt; inv(a) 
+    array([[[-2.  ,  1.  ], 
+            [ 1.5 , -0.5 ]], 
+           [[-1.25,  0.75], 
+            [ 0.75, -0.25]]]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+
+    <span class="s1">signature = </span><span class="s2">'D-&gt;D' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;d'</span>
+    <span class="s1">extobj = get_linalg_error_extobj(_raise_linalgerror_singular)</span>
+    <span class="s1">ainv = _umath_linalg.inv(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+    <span class="s3">return </span><span class="s1">wrap(ainv.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">))</span>
+
+
+<span class="s3">def </span><span class="s1">_matrix_power_dispatcher(a</span><span class="s3">, </span><span class="s1">n):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_matrix_power_dispatcher)</span>
+<span class="s3">def </span><span class="s1">matrix_power(a</span><span class="s3">, </span><span class="s1">n):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Raise a square matrix to the (integer) power `n`. 
+ 
+    For positive integers `n`, the power is computed by repeated matrix 
+    squarings and matrix multiplications. If ``n == 0``, the identity matrix 
+    of the same shape as M is returned. If ``n &lt; 0``, the inverse 
+    is computed and then raised to the ``abs(n)``. 
+ 
+    .. note:: Stacks of object matrices are not currently supported. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        Matrix to be &quot;powered&quot;. 
+    n : int 
+        The exponent can be any integer or long integer, positive, 
+        negative, or zero. 
+ 
+    Returns 
+    ------- 
+    a**n : (..., M, M) ndarray or matrix object 
+        The return value is the same shape and type as `M`; 
+        if the exponent is positive or zero then the type of the 
+        elements is the same as those of `M`. If the exponent is 
+        negative the elements are floating-point. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        For matrices that are not square or that (for negative powers) cannot 
+        be inverted numerically. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy.linalg import matrix_power 
+    &gt;&gt;&gt; i = np.array([[0, 1], [-1, 0]]) # matrix equiv. of the imaginary unit 
+    &gt;&gt;&gt; matrix_power(i, 3) # should = -i 
+    array([[ 0, -1], 
+           [ 1,  0]]) 
+    &gt;&gt;&gt; matrix_power(i, 0) 
+    array([[1, 0], 
+           [0, 1]]) 
+    &gt;&gt;&gt; matrix_power(i, -3) # should = 1/(-i) = i, but w/ f.p. elements 
+    array([[ 0.,  1.], 
+           [-1.,  0.]]) 
+ 
+    Somewhat more sophisticated example 
+ 
+    &gt;&gt;&gt; q = np.zeros((4, 4)) 
+    &gt;&gt;&gt; q[0:2, 0:2] = -i 
+    &gt;&gt;&gt; q[2:4, 2:4] = i 
+    &gt;&gt;&gt; q # one of the three quaternion units not equal to 1 
+    array([[ 0., -1.,  0.,  0.], 
+           [ 1.,  0.,  0.,  0.], 
+           [ 0.,  0.,  0.,  1.], 
+           [ 0.,  0., -1.,  0.]]) 
+    &gt;&gt;&gt; matrix_power(q, 2) # = -np.eye(4) 
+    array([[-1.,  0.,  0.,  0.], 
+           [ 0., -1.,  0.,  0.], 
+           [ 0.,  0., -1.,  0.], 
+           [ 0.,  0.,  0., -1.]]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a = asanyarray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+
+    <span class="s3">try</span><span class="s1">:</span>
+        <span class="s1">n = operator.index(n)</span>
+    <span class="s3">except </span><span class="s1">TypeError </span><span class="s3">as </span><span class="s1">e:</span>
+        <span class="s3">raise </span><span class="s1">TypeError(</span><span class="s2">&quot;exponent must be an integer&quot;</span><span class="s1">) </span><span class="s3">from </span><span class="s1">e</span>
+
+    <span class="s5"># Fall back on dot for object arrays. Object arrays are not supported by</span>
+    <span class="s5"># the current implementation of matmul using einsum</span>
+    <span class="s3">if </span><span class="s1">a.dtype != object:</span>
+        <span class="s1">fmatmul = matmul</span>
+    <span class="s3">elif </span><span class="s1">a.ndim == </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s1">fmatmul = dot</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">NotImplementedError(</span>
+            <span class="s2">&quot;matrix_power not supported for stacks of object arrays&quot;</span><span class="s1">)</span>
+
+    <span class="s3">if </span><span class="s1">n == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">a = empty_like(a)</span>
+        <span class="s1">a[...] = eye(a.shape[-</span><span class="s4">2</span><span class="s1">]</span><span class="s3">, </span><span class="s1">dtype=a.dtype)</span>
+        <span class="s3">return </span><span class="s1">a</span>
+
+    <span class="s3">elif </span><span class="s1">n &lt; </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">a = inv(a)</span>
+        <span class="s1">n = abs(n)</span>
+
+    <span class="s5"># short-cuts.</span>
+    <span class="s3">if </span><span class="s1">n == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">a</span>
+
+    <span class="s3">elif </span><span class="s1">n == </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">fmatmul(a</span><span class="s3">, </span><span class="s1">a)</span>
+
+    <span class="s3">elif </span><span class="s1">n == </span><span class="s4">3</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">fmatmul(fmatmul(a</span><span class="s3">, </span><span class="s1">a)</span><span class="s3">, </span><span class="s1">a)</span>
+
+    <span class="s5"># Use binary decomposition to reduce the number of matrix multiplications.</span>
+    <span class="s5"># Here, we iterate over the bits of n, from LSB to MSB, raise `a` to</span>
+    <span class="s5"># increasing powers of 2, and multiply into the result as needed.</span>
+    <span class="s1">z = result = </span><span class="s3">None</span>
+    <span class="s3">while </span><span class="s1">n &gt; </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">z = a </span><span class="s3">if </span><span class="s1">z </span><span class="s3">is None else </span><span class="s1">fmatmul(z</span><span class="s3">, </span><span class="s1">z)</span>
+        <span class="s1">n</span><span class="s3">, </span><span class="s1">bit = divmod(n</span><span class="s3">, </span><span class="s4">2</span><span class="s1">)</span>
+        <span class="s3">if </span><span class="s1">bit:</span>
+            <span class="s1">result = z </span><span class="s3">if </span><span class="s1">result </span><span class="s3">is None else </span><span class="s1">fmatmul(result</span><span class="s3">, </span><span class="s1">z)</span>
+
+    <span class="s3">return </span><span class="s1">result</span>
+
+
+<span class="s5"># Cholesky decomposition</span>
+
+
+<span class="s1">@array_function_dispatch(_unary_dispatcher)</span>
+<span class="s3">def </span><span class="s1">cholesky(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Cholesky decomposition. 
+ 
+    Return the Cholesky decomposition, `L * L.H`, of the square matrix `a`, 
+    where `L` is lower-triangular and .H is the conjugate transpose operator 
+    (which is the ordinary transpose if `a` is real-valued).  `a` must be 
+    Hermitian (symmetric if real-valued) and positive-definite. No 
+    checking is performed to verify whether `a` is Hermitian or not. 
+    In addition, only the lower-triangular and diagonal elements of `a` 
+    are used. Only `L` is actually returned. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        Hermitian (symmetric if all elements are real), positive-definite 
+        input matrix. 
+ 
+    Returns 
+    ------- 
+    L : (..., M, M) array_like 
+        Upper or lower-triangular Cholesky factor of `a`.  Returns a 
+        matrix object if `a` is a matrix object. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+       If the decomposition fails, for example, if `a` is not 
+       positive-definite. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.cholesky : Similar function in SciPy. 
+    scipy.linalg.cholesky_banded : Cholesky decompose a banded Hermitian 
+                                   positive-definite matrix. 
+    scipy.linalg.cho_factor : Cholesky decomposition of a matrix, to use in 
+                              `scipy.linalg.cho_solve`. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    The Cholesky decomposition is often used as a fast way of solving 
+ 
+    .. math:: A \\mathbf{x} = \\mathbf{b} 
+ 
+    (when `A` is both Hermitian/symmetric and positive-definite). 
+ 
+    First, we solve for :math:`\\mathbf{y}` in 
+ 
+    .. math:: L \\mathbf{y} = \\mathbf{b}, 
+ 
+    and then for :math:`\\mathbf{x}` in 
+ 
+    .. math:: L.H \\mathbf{x} = \\mathbf{y}. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; A = np.array([[1,-2j],[2j,5]]) 
+    &gt;&gt;&gt; A 
+    array([[ 1.+0.j, -0.-2.j], 
+           [ 0.+2.j,  5.+0.j]]) 
+    &gt;&gt;&gt; L = np.linalg.cholesky(A) 
+    &gt;&gt;&gt; L 
+    array([[1.+0.j, 0.+0.j], 
+           [0.+2.j, 1.+0.j]]) 
+    &gt;&gt;&gt; np.dot(L, L.T.conj()) # verify that L * L.H = A 
+    array([[1.+0.j, 0.-2.j], 
+           [0.+2.j, 5.+0.j]]) 
+    &gt;&gt;&gt; A = [[1,-2j],[2j,5]] # what happens if A is only array_like? 
+    &gt;&gt;&gt; np.linalg.cholesky(A) # an ndarray object is returned 
+    array([[1.+0.j, 0.+0.j], 
+           [0.+2.j, 1.+0.j]]) 
+    &gt;&gt;&gt; # But a matrix object is returned if A is a matrix object 
+    &gt;&gt;&gt; np.linalg.cholesky(np.matrix(A)) 
+    matrix([[ 1.+0.j,  0.+0.j], 
+            [ 0.+2.j,  1.+0.j]]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">extobj = get_linalg_error_extobj(_raise_linalgerror_nonposdef)</span>
+    <span class="s1">gufunc = _umath_linalg.cholesky_lo</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+    <span class="s1">signature = </span><span class="s2">'D-&gt;D' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;d'</span>
+    <span class="s1">r = gufunc(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+    <span class="s3">return </span><span class="s1">wrap(r.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">))</span>
+
+
+<span class="s5"># QR decomposition</span>
+
+<span class="s3">def </span><span class="s1">_qr_dispatcher(a</span><span class="s3">, </span><span class="s1">mode=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_qr_dispatcher)</span>
+<span class="s3">def </span><span class="s1">qr(a</span><span class="s3">, </span><span class="s1">mode=</span><span class="s2">'reduced'</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the qr factorization of a matrix. 
+ 
+    Factor the matrix `a` as *qr*, where `q` is orthonormal and `r` is 
+    upper-triangular. 
+ 
+    Parameters 
+    ---------- 
+    a : array_like, shape (M, N) 
+        Matrix to be factored. 
+    mode : {'reduced', 'complete', 'r', 'raw'}, optional 
+        If K = min(M, N), then 
+ 
+        * 'reduced'  : returns q, r with dimensions (M, K), (K, N) (default) 
+        * 'complete' : returns q, r with dimensions (M, M), (M, N) 
+        * 'r'        : returns r only with dimensions (K, N) 
+        * 'raw'      : returns h, tau with dimensions (N, M), (K,) 
+ 
+        The options 'reduced', 'complete, and 'raw' are new in numpy 1.8, 
+        see the notes for more information. The default is 'reduced', and to 
+        maintain backward compatibility with earlier versions of numpy both 
+        it and the old default 'full' can be omitted. Note that array h 
+        returned in 'raw' mode is transposed for calling Fortran. The 
+        'economic' mode is deprecated.  The modes 'full' and 'economic' may 
+        be passed using only the first letter for backwards compatibility, 
+        but all others must be spelled out. See the Notes for more 
+        explanation. 
+ 
+ 
+    Returns 
+    ------- 
+    q : ndarray of float or complex, optional 
+        A matrix with orthonormal columns. When mode = 'complete' the 
+        result is an orthogonal/unitary matrix depending on whether or not 
+        a is real/complex. The determinant may be either +/- 1 in that 
+        case. 
+    r : ndarray of float or complex, optional 
+        The upper-triangular matrix. 
+    (h, tau) : ndarrays of np.double or np.cdouble, optional 
+        The array h contains the Householder reflectors that generate q 
+        along with r. The tau array contains scaling factors for the 
+        reflectors. In the deprecated  'economic' mode only h is returned. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If factoring fails. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.qr : Similar function in SciPy. 
+    scipy.linalg.rq : Compute RQ decomposition of a matrix. 
+ 
+    Notes 
+    ----- 
+    This is an interface to the LAPACK routines ``dgeqrf``, ``zgeqrf``, 
+    ``dorgqr``, and ``zungqr``. 
+ 
+    For more information on the qr factorization, see for example: 
+    https://en.wikipedia.org/wiki/QR_factorization 
+ 
+    Subclasses of `ndarray` are preserved except for the 'raw' mode. So if 
+    `a` is of type `matrix`, all the return values will be matrices too. 
+ 
+    New 'reduced', 'complete', and 'raw' options for mode were added in 
+    NumPy 1.8.0 and the old option 'full' was made an alias of 'reduced'.  In 
+    addition the options 'full' and 'economic' were deprecated.  Because 
+    'full' was the previous default and 'reduced' is the new default, 
+    backward compatibility can be maintained by letting `mode` default. 
+    The 'raw' option was added so that LAPACK routines that can multiply 
+    arrays by q using the Householder reflectors can be used. Note that in 
+    this case the returned arrays are of type np.double or np.cdouble and 
+    the h array is transposed to be FORTRAN compatible.  No routines using 
+    the 'raw' return are currently exposed by numpy, but some are available 
+    in lapack_lite and just await the necessary work. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; a = np.random.randn(9, 6) 
+    &gt;&gt;&gt; q, r = np.linalg.qr(a) 
+    &gt;&gt;&gt; np.allclose(a, np.dot(q, r))  # a does equal qr 
+    True 
+    &gt;&gt;&gt; r2 = np.linalg.qr(a, mode='r') 
+    &gt;&gt;&gt; np.allclose(r, r2)  # mode='r' returns the same r as mode='full' 
+    True 
+ 
+    Example illustrating a common use of `qr`: solving of least squares 
+    problems 
+ 
+    What are the least-squares-best `m` and `y0` in ``y = y0 + mx`` for 
+    the following data: {(0,1), (1,0), (1,2), (2,1)}. (Graph the points 
+    and you'll see that it should be y0 = 0, m = 1.)  The answer is provided 
+    by solving the over-determined matrix equation ``Ax = b``, where:: 
+ 
+      A = array([[0, 1], [1, 1], [1, 1], [2, 1]]) 
+      x = array([[y0], [m]]) 
+      b = array([[1], [0], [2], [1]]) 
+ 
+    If A = qr such that q is orthonormal (which is always possible via 
+    Gram-Schmidt), then ``x = inv(r) * (q.T) * b``.  (In numpy practice, 
+    however, we simply use `lstsq`.) 
+ 
+    &gt;&gt;&gt; A = np.array([[0, 1], [1, 1], [1, 1], [2, 1]]) 
+    &gt;&gt;&gt; A 
+    array([[0, 1], 
+           [1, 1], 
+           [1, 1], 
+           [2, 1]]) 
+    &gt;&gt;&gt; b = np.array([1, 0, 2, 1]) 
+    &gt;&gt;&gt; q, r = np.linalg.qr(A) 
+    &gt;&gt;&gt; p = np.dot(q.T, b) 
+    &gt;&gt;&gt; np.dot(np.linalg.inv(r), p) 
+    array([  1.1e-16,   1.0e+00]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s3">if </span><span class="s1">mode </span><span class="s3">not in </span><span class="s1">(</span><span class="s2">'reduced'</span><span class="s3">, </span><span class="s2">'complete'</span><span class="s3">, </span><span class="s2">'r'</span><span class="s3">, </span><span class="s2">'raw'</span><span class="s1">):</span>
+        <span class="s3">if </span><span class="s1">mode </span><span class="s3">in </span><span class="s1">(</span><span class="s2">'f'</span><span class="s3">, </span><span class="s2">'full'</span><span class="s1">):</span>
+            <span class="s5"># 2013-04-01, 1.8</span>
+            <span class="s1">msg = </span><span class="s2">&quot;&quot;</span><span class="s1">.join((</span>
+                    <span class="s2">&quot;The 'full' option is deprecated in favor of 'reduced'.</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s3">,</span>
+                    <span class="s2">&quot;For backward compatibility let mode default.&quot;</span><span class="s1">))</span>
+            <span class="s1">warnings.warn(msg</span><span class="s3">, </span><span class="s1">DeprecationWarning</span><span class="s3">, </span><span class="s1">stacklevel=</span><span class="s4">3</span><span class="s1">)</span>
+            <span class="s1">mode = </span><span class="s2">'reduced'</span>
+        <span class="s3">elif </span><span class="s1">mode </span><span class="s3">in </span><span class="s1">(</span><span class="s2">'e'</span><span class="s3">, </span><span class="s2">'economic'</span><span class="s1">):</span>
+            <span class="s5"># 2013-04-01, 1.8</span>
+            <span class="s1">msg = </span><span class="s2">&quot;The 'economic' option is deprecated.&quot;</span>
+            <span class="s1">warnings.warn(msg</span><span class="s3">, </span><span class="s1">DeprecationWarning</span><span class="s3">, </span><span class="s1">stacklevel=</span><span class="s4">3</span><span class="s1">)</span>
+            <span class="s1">mode = </span><span class="s2">'economic'</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">f&quot;Unrecognized mode '</span><span class="s3">{</span><span class="s1">mode</span><span class="s3">}</span><span class="s2">'&quot;</span><span class="s1">)</span>
+
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_2d(a)</span>
+    <span class="s1">m</span><span class="s3">, </span><span class="s1">n = a.shape</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+    <span class="s1">a = _fastCopyAndTranspose(t</span><span class="s3">, </span><span class="s1">a)</span>
+    <span class="s1">a = _to_native_byte_order(a)</span>
+    <span class="s1">mn = min(m</span><span class="s3">, </span><span class="s1">n)</span>
+    <span class="s1">tau = zeros((mn</span><span class="s3">,</span><span class="s1">)</span><span class="s3">, </span><span class="s1">t)</span>
+
+    <span class="s3">if </span><span class="s1">isComplexType(t):</span>
+        <span class="s1">lapack_routine = lapack_lite.zgeqrf</span>
+        <span class="s1">routine_name = </span><span class="s2">'zgeqrf'</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">lapack_routine = lapack_lite.dgeqrf</span>
+        <span class="s1">routine_name = </span><span class="s2">'dgeqrf'</span>
+
+    <span class="s5"># calculate optimal size of work data 'work'</span>
+    <span class="s1">lwork = </span><span class="s4">1</span>
+    <span class="s1">work = zeros((lwork</span><span class="s3">,</span><span class="s1">)</span><span class="s3">, </span><span class="s1">t)</span>
+    <span class="s1">results = lapack_routine(m</span><span class="s3">, </span><span class="s1">n</span><span class="s3">, </span><span class="s1">a</span><span class="s3">, </span><span class="s1">max(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">tau</span><span class="s3">, </span><span class="s1">work</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s3">, </span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s3">if </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">] != </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'%s returns %d' </span><span class="s1">% (routine_name</span><span class="s3">, </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">]))</span>
+
+    <span class="s5"># do qr decomposition</span>
+    <span class="s1">lwork = max(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">n</span><span class="s3">, </span><span class="s1">int(abs(work[</span><span class="s4">0</span><span class="s1">])))</span>
+    <span class="s1">work = zeros((lwork</span><span class="s3">,</span><span class="s1">)</span><span class="s3">, </span><span class="s1">t)</span>
+    <span class="s1">results = lapack_routine(m</span><span class="s3">, </span><span class="s1">n</span><span class="s3">, </span><span class="s1">a</span><span class="s3">, </span><span class="s1">max(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">tau</span><span class="s3">, </span><span class="s1">work</span><span class="s3">, </span><span class="s1">lwork</span><span class="s3">, </span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s3">if </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">] != </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'%s returns %d' </span><span class="s1">% (routine_name</span><span class="s3">, </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">]))</span>
+
+    <span class="s5"># handle modes that don't return q</span>
+    <span class="s3">if </span><span class="s1">mode == </span><span class="s2">'r'</span><span class="s1">:</span>
+        <span class="s1">r = _fastCopyAndTranspose(result_t</span><span class="s3">, </span><span class="s1">a[:</span><span class="s3">, </span><span class="s1">:mn])</span>
+        <span class="s3">return </span><span class="s1">wrap(triu(r))</span>
+
+    <span class="s3">if </span><span class="s1">mode == </span><span class="s2">'raw'</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">a</span><span class="s3">, </span><span class="s1">tau</span>
+
+    <span class="s3">if </span><span class="s1">mode == </span><span class="s2">'economic'</span><span class="s1">:</span>
+        <span class="s3">if </span><span class="s1">t != result_t :</span>
+            <span class="s1">a = a.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+        <span class="s3">return </span><span class="s1">wrap(a.T)</span>
+
+    <span class="s5">#  generate q from a</span>
+    <span class="s3">if </span><span class="s1">mode == </span><span class="s2">'complete' </span><span class="s3">and </span><span class="s1">m &gt; n:</span>
+        <span class="s1">mc = m</span>
+        <span class="s1">q = empty((m</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">t)</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">mc = mn</span>
+        <span class="s1">q = empty((n</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">t)</span>
+    <span class="s1">q[:n] = a</span>
+
+    <span class="s3">if </span><span class="s1">isComplexType(t):</span>
+        <span class="s1">lapack_routine = lapack_lite.zungqr</span>
+        <span class="s1">routine_name = </span><span class="s2">'zungqr'</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">lapack_routine = lapack_lite.dorgqr</span>
+        <span class="s1">routine_name = </span><span class="s2">'dorgqr'</span>
+
+    <span class="s5"># determine optimal lwork</span>
+    <span class="s1">lwork = </span><span class="s4">1</span>
+    <span class="s1">work = zeros((lwork</span><span class="s3">,</span><span class="s1">)</span><span class="s3">, </span><span class="s1">t)</span>
+    <span class="s1">results = lapack_routine(m</span><span class="s3">, </span><span class="s1">mc</span><span class="s3">, </span><span class="s1">mn</span><span class="s3">, </span><span class="s1">q</span><span class="s3">, </span><span class="s1">max(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">tau</span><span class="s3">, </span><span class="s1">work</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s3">, </span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s3">if </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">] != </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'%s returns %d' </span><span class="s1">% (routine_name</span><span class="s3">, </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">]))</span>
+
+    <span class="s5"># compute q</span>
+    <span class="s1">lwork = max(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">n</span><span class="s3">, </span><span class="s1">int(abs(work[</span><span class="s4">0</span><span class="s1">])))</span>
+    <span class="s1">work = zeros((lwork</span><span class="s3">,</span><span class="s1">)</span><span class="s3">, </span><span class="s1">t)</span>
+    <span class="s1">results = lapack_routine(m</span><span class="s3">, </span><span class="s1">mc</span><span class="s3">, </span><span class="s1">mn</span><span class="s3">, </span><span class="s1">q</span><span class="s3">, </span><span class="s1">max(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">tau</span><span class="s3">, </span><span class="s1">work</span><span class="s3">, </span><span class="s1">lwork</span><span class="s3">, </span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s3">if </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">] != </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'%s returns %d' </span><span class="s1">% (routine_name</span><span class="s3">, </span><span class="s1">results[</span><span class="s2">'info'</span><span class="s1">]))</span>
+
+    <span class="s1">q = _fastCopyAndTranspose(result_t</span><span class="s3">, </span><span class="s1">q[:mc])</span>
+    <span class="s1">r = _fastCopyAndTranspose(result_t</span><span class="s3">, </span><span class="s1">a[:</span><span class="s3">, </span><span class="s1">:mc])</span>
+
+    <span class="s3">return </span><span class="s1">wrap(q)</span><span class="s3">, </span><span class="s1">wrap(triu(r))</span>
+
+
+<span class="s5"># Eigenvalues</span>
+
+
+<span class="s1">@array_function_dispatch(_unary_dispatcher)</span>
+<span class="s3">def </span><span class="s1">eigvals(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the eigenvalues of a general matrix. 
+ 
+    Main difference between `eigvals` and `eig`: the eigenvectors aren't 
+    returned. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        A complex- or real-valued matrix whose eigenvalues will be computed. 
+ 
+    Returns 
+    ------- 
+    w : (..., M,) ndarray 
+        The eigenvalues, each repeated according to its multiplicity. 
+        They are not necessarily ordered, nor are they necessarily 
+        real for real matrices. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If the eigenvalue computation does not converge. 
+ 
+    See Also 
+    -------- 
+    eig : eigenvalues and right eigenvectors of general arrays 
+    eigvalsh : eigenvalues of real symmetric or complex Hermitian 
+               (conjugate symmetric) arrays. 
+    eigh : eigenvalues and eigenvectors of real symmetric or complex 
+           Hermitian (conjugate symmetric) arrays. 
+    scipy.linalg.eigvals : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    This is implemented using the ``_geev`` LAPACK routines which compute 
+    the eigenvalues and eigenvectors of general square arrays. 
+ 
+    Examples 
+    -------- 
+    Illustration, using the fact that the eigenvalues of a diagonal matrix 
+    are its diagonal elements, that multiplying a matrix on the left 
+    by an orthogonal matrix, `Q`, and on the right by `Q.T` (the transpose 
+    of `Q`), preserves the eigenvalues of the &quot;middle&quot; matrix.  In other words, 
+    if `Q` is orthogonal, then ``Q * A * Q.T`` has the same eigenvalues as 
+    ``A``: 
+ 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+    &gt;&gt;&gt; x = np.random.random() 
+    &gt;&gt;&gt; Q = np.array([[np.cos(x), -np.sin(x)], [np.sin(x), np.cos(x)]]) 
+    &gt;&gt;&gt; LA.norm(Q[0, :]), LA.norm(Q[1, :]), np.dot(Q[0, :],Q[1, :]) 
+    (1.0, 1.0, 0.0) 
+ 
+    Now multiply a diagonal matrix by ``Q`` on one side and by ``Q.T`` on the other: 
+ 
+    &gt;&gt;&gt; D = np.diag((-1,1)) 
+    &gt;&gt;&gt; LA.eigvals(D) 
+    array([-1.,  1.]) 
+    &gt;&gt;&gt; A = np.dot(Q, D) 
+    &gt;&gt;&gt; A = np.dot(A, Q.T) 
+    &gt;&gt;&gt; LA.eigvals(A) 
+    array([ 1., -1.]) # random 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">_assert_finite(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+
+    <span class="s1">extobj = get_linalg_error_extobj(</span>
+        <span class="s1">_raise_linalgerror_eigenvalues_nonconvergence)</span>
+    <span class="s1">signature = </span><span class="s2">'D-&gt;D' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;D'</span>
+    <span class="s1">w = _umath_linalg.eigvals(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+
+    <span class="s3">if not </span><span class="s1">isComplexType(t):</span>
+        <span class="s3">if </span><span class="s1">all(w.imag == </span><span class="s4">0</span><span class="s1">):</span>
+            <span class="s1">w = w.real</span>
+            <span class="s1">result_t = _realType(result_t)</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s1">result_t = _complexType(result_t)</span>
+
+    <span class="s3">return </span><span class="s1">w.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+
+
+<span class="s3">def </span><span class="s1">_eigvalsh_dispatcher(a</span><span class="s3">, </span><span class="s1">UPLO=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_eigvalsh_dispatcher)</span>
+<span class="s3">def </span><span class="s1">eigvalsh(a</span><span class="s3">, </span><span class="s1">UPLO=</span><span class="s2">'L'</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the eigenvalues of a complex Hermitian or real symmetric matrix. 
+ 
+    Main difference from eigh: the eigenvectors are not computed. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        A complex- or real-valued matrix whose eigenvalues are to be 
+        computed. 
+    UPLO : {'L', 'U'}, optional 
+        Specifies whether the calculation is done with the lower triangular 
+        part of `a` ('L', default) or the upper triangular part ('U'). 
+        Irrespective of this value only the real parts of the diagonal will 
+        be considered in the computation to preserve the notion of a Hermitian 
+        matrix. It therefore follows that the imaginary part of the diagonal 
+        will always be treated as zero. 
+ 
+    Returns 
+    ------- 
+    w : (..., M,) ndarray 
+        The eigenvalues in ascending order, each repeated according to 
+        its multiplicity. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If the eigenvalue computation does not converge. 
+ 
+    See Also 
+    -------- 
+    eigh : eigenvalues and eigenvectors of real symmetric or complex Hermitian 
+           (conjugate symmetric) arrays. 
+    eigvals : eigenvalues of general real or complex arrays. 
+    eig : eigenvalues and right eigenvectors of general real or complex 
+          arrays. 
+    scipy.linalg.eigvalsh : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    The eigenvalues are computed using LAPACK routines ``_syevd``, ``_heevd``. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+    &gt;&gt;&gt; a = np.array([[1, -2j], [2j, 5]]) 
+    &gt;&gt;&gt; LA.eigvalsh(a) 
+    array([ 0.17157288,  5.82842712]) # may vary 
+ 
+    &gt;&gt;&gt; # demonstrate the treatment of the imaginary part of the diagonal 
+    &gt;&gt;&gt; a = np.array([[5+2j, 9-2j], [0+2j, 2-1j]]) 
+    &gt;&gt;&gt; a 
+    array([[5.+2.j, 9.-2.j], 
+           [0.+2.j, 2.-1.j]]) 
+    &gt;&gt;&gt; # with UPLO='L' this is numerically equivalent to using LA.eigvals() 
+    &gt;&gt;&gt; # with: 
+    &gt;&gt;&gt; b = np.array([[5.+0.j, 0.-2.j], [0.+2.j, 2.-0.j]]) 
+    &gt;&gt;&gt; b 
+    array([[5.+0.j, 0.-2.j], 
+           [0.+2.j, 2.+0.j]]) 
+    &gt;&gt;&gt; wa = LA.eigvalsh(a) 
+    &gt;&gt;&gt; wb = LA.eigvals(b) 
+    &gt;&gt;&gt; wa; wb 
+    array([1., 6.]) 
+    array([6.+0.j, 1.+0.j]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">UPLO = UPLO.upper()</span>
+    <span class="s3">if </span><span class="s1">UPLO </span><span class="s3">not in </span><span class="s1">(</span><span class="s2">'L'</span><span class="s3">, </span><span class="s2">'U'</span><span class="s1">):</span>
+        <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;UPLO argument must be 'L' or 'U'&quot;</span><span class="s1">)</span>
+
+    <span class="s1">extobj = get_linalg_error_extobj(</span>
+        <span class="s1">_raise_linalgerror_eigenvalues_nonconvergence)</span>
+    <span class="s3">if </span><span class="s1">UPLO == </span><span class="s2">'L'</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.eigvalsh_lo</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.eigvalsh_up</span>
+
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+    <span class="s1">signature = </span><span class="s2">'D-&gt;d' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;d'</span>
+    <span class="s1">w = gufunc(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+    <span class="s3">return </span><span class="s1">w.astype(_realType(result_t)</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+
+<span class="s3">def </span><span class="s1">_convertarray(a):</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+    <span class="s1">a = _fastCT(a.astype(t))</span>
+    <span class="s3">return </span><span class="s1">a</span><span class="s3">, </span><span class="s1">t</span><span class="s3">, </span><span class="s1">result_t</span>
+
+
+<span class="s5"># Eigenvectors</span>
+
+
+<span class="s1">@array_function_dispatch(_unary_dispatcher)</span>
+<span class="s3">def </span><span class="s1">eig(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the eigenvalues and right eigenvectors of a square array. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array 
+        Matrices for which the eigenvalues and right eigenvectors will 
+        be computed 
+ 
+    Returns 
+    ------- 
+    w : (..., M) array 
+        The eigenvalues, each repeated according to its multiplicity. 
+        The eigenvalues are not necessarily ordered. The resulting 
+        array will be of complex type, unless the imaginary part is 
+        zero in which case it will be cast to a real type. When `a` 
+        is real the resulting eigenvalues will be real (0 imaginary 
+        part) or occur in conjugate pairs 
+ 
+    v : (..., M, M) array 
+        The normalized (unit &quot;length&quot;) eigenvectors, such that the 
+        column ``v[:,i]`` is the eigenvector corresponding to the 
+        eigenvalue ``w[i]``. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If the eigenvalue computation does not converge. 
+ 
+    See Also 
+    -------- 
+    eigvals : eigenvalues of a non-symmetric array. 
+    eigh : eigenvalues and eigenvectors of a real symmetric or complex 
+           Hermitian (conjugate symmetric) array. 
+    eigvalsh : eigenvalues of a real symmetric or complex Hermitian 
+               (conjugate symmetric) array. 
+    scipy.linalg.eig : Similar function in SciPy that also solves the 
+                       generalized eigenvalue problem. 
+    scipy.linalg.schur : Best choice for unitary and other non-Hermitian 
+                         normal matrices. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    This is implemented using the ``_geev`` LAPACK routines which compute 
+    the eigenvalues and eigenvectors of general square arrays. 
+ 
+    The number `w` is an eigenvalue of `a` if there exists a vector 
+    `v` such that ``a @ v = w * v``. Thus, the arrays `a`, `w`, and 
+    `v` satisfy the equations ``a @ v[:,i] = w[i] * v[:,i]`` 
+    for :math:`i \\in \\{0,...,M-1\\}`. 
+ 
+    The array `v` of eigenvectors may not be of maximum rank, that is, some 
+    of the columns may be linearly dependent, although round-off error may 
+    obscure that fact. If the eigenvalues are all different, then theoretically 
+    the eigenvectors are linearly independent and `a` can be diagonalized by 
+    a similarity transformation using `v`, i.e, ``inv(v) @ a @ v`` is diagonal. 
+ 
+    For non-Hermitian normal matrices the SciPy function `scipy.linalg.schur` 
+    is preferred because the matrix `v` is guaranteed to be unitary, which is 
+    not the case when using `eig`. The Schur factorization produces an 
+    upper triangular matrix rather than a diagonal matrix, but for normal 
+    matrices only the diagonal of the upper triangular matrix is needed, the 
+    rest is roundoff error. 
+ 
+    Finally, it is emphasized that `v` consists of the *right* (as in 
+    right-hand side) eigenvectors of `a`.  A vector `y` satisfying 
+    ``y.T @ a = z * y.T`` for some number `z` is called a *left* 
+    eigenvector of `a`, and, in general, the left and right eigenvectors 
+    of a matrix are not necessarily the (perhaps conjugate) transposes 
+    of each other. 
+ 
+    References 
+    ---------- 
+    G. Strang, *Linear Algebra and Its Applications*, 2nd Ed., Orlando, FL, 
+    Academic Press, Inc., 1980, Various pp. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+ 
+    (Almost) trivial example with real e-values and e-vectors. 
+ 
+    &gt;&gt;&gt; w, v = LA.eig(np.diag((1, 2, 3))) 
+    &gt;&gt;&gt; w; v 
+    array([1., 2., 3.]) 
+    array([[1., 0., 0.], 
+           [0., 1., 0.], 
+           [0., 0., 1.]]) 
+ 
+    Real matrix possessing complex e-values and e-vectors; note that the 
+    e-values are complex conjugates of each other. 
+ 
+    &gt;&gt;&gt; w, v = LA.eig(np.array([[1, -1], [1, 1]])) 
+    &gt;&gt;&gt; w; v 
+    array([1.+1.j, 1.-1.j]) 
+    array([[0.70710678+0.j        , 0.70710678-0.j        ], 
+           [0.        -0.70710678j, 0.        +0.70710678j]]) 
+ 
+    Complex-valued matrix with real e-values (but complex-valued e-vectors); 
+    note that ``a.conj().T == a``, i.e., `a` is Hermitian. 
+ 
+    &gt;&gt;&gt; a = np.array([[1, 1j], [-1j, 1]]) 
+    &gt;&gt;&gt; w, v = LA.eig(a) 
+    &gt;&gt;&gt; w; v 
+    array([2.+0.j, 0.+0.j]) 
+    array([[ 0.        +0.70710678j,  0.70710678+0.j        ], # may vary 
+           [ 0.70710678+0.j        , -0.        +0.70710678j]]) 
+ 
+    Be careful about round-off error! 
+ 
+    &gt;&gt;&gt; a = np.array([[1 + 1e-9, 0], [0, 1 - 1e-9]]) 
+    &gt;&gt;&gt; # Theor. e-values are 1 +/- 1e-9 
+    &gt;&gt;&gt; w, v = LA.eig(a) 
+    &gt;&gt;&gt; w; v 
+    array([1., 1.]) 
+    array([[1., 0.], 
+           [0., 1.]]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">_assert_finite(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+
+    <span class="s1">extobj = get_linalg_error_extobj(</span>
+        <span class="s1">_raise_linalgerror_eigenvalues_nonconvergence)</span>
+    <span class="s1">signature = </span><span class="s2">'D-&gt;DD' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;DD'</span>
+    <span class="s1">w</span><span class="s3">, </span><span class="s1">vt = _umath_linalg.eig(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+
+    <span class="s3">if not </span><span class="s1">isComplexType(t) </span><span class="s3">and </span><span class="s1">all(w.imag == </span><span class="s4">0.0</span><span class="s1">):</span>
+        <span class="s1">w = w.real</span>
+        <span class="s1">vt = vt.real</span>
+        <span class="s1">result_t = _realType(result_t)</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">result_t = _complexType(result_t)</span>
+
+    <span class="s1">vt = vt.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s3">return </span><span class="s1">w.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span><span class="s3">, </span><span class="s1">wrap(vt)</span>
+
+
+<span class="s1">@array_function_dispatch(_eigvalsh_dispatcher)</span>
+<span class="s3">def </span><span class="s1">eigh(a</span><span class="s3">, </span><span class="s1">UPLO=</span><span class="s2">'L'</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return the eigenvalues and eigenvectors of a complex Hermitian 
+    (conjugate symmetric) or a real symmetric matrix. 
+ 
+    Returns two objects, a 1-D array containing the eigenvalues of `a`, and 
+    a 2-D square array or matrix (depending on the input type) of the 
+    corresponding eigenvectors (in columns). 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array 
+        Hermitian or real symmetric matrices whose eigenvalues and 
+        eigenvectors are to be computed. 
+    UPLO : {'L', 'U'}, optional 
+        Specifies whether the calculation is done with the lower triangular 
+        part of `a` ('L', default) or the upper triangular part ('U'). 
+        Irrespective of this value only the real parts of the diagonal will 
+        be considered in the computation to preserve the notion of a Hermitian 
+        matrix. It therefore follows that the imaginary part of the diagonal 
+        will always be treated as zero. 
+ 
+    Returns 
+    ------- 
+    w : (..., M) ndarray 
+        The eigenvalues in ascending order, each repeated according to 
+        its multiplicity. 
+    v : {(..., M, M) ndarray, (..., M, M) matrix} 
+        The column ``v[:, i]`` is the normalized eigenvector corresponding 
+        to the eigenvalue ``w[i]``.  Will return a matrix object if `a` is 
+        a matrix object. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If the eigenvalue computation does not converge. 
+ 
+    See Also 
+    -------- 
+    eigvalsh : eigenvalues of real symmetric or complex Hermitian 
+               (conjugate symmetric) arrays. 
+    eig : eigenvalues and right eigenvectors for non-symmetric arrays. 
+    eigvals : eigenvalues of non-symmetric arrays. 
+    scipy.linalg.eigh : Similar function in SciPy (but also solves the 
+                        generalized eigenvalue problem). 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    The eigenvalues/eigenvectors are computed using LAPACK routines ``_syevd``, 
+    ``_heevd``. 
+ 
+    The eigenvalues of real symmetric or complex Hermitian matrices are 
+    always real. [1]_ The array `v` of (column) eigenvectors is unitary 
+    and `a`, `w`, and `v` satisfy the equations 
+    ``dot(a, v[:, i]) = w[i] * v[:, i]``. 
+ 
+    References 
+    ---------- 
+    .. [1] G. Strang, *Linear Algebra and Its Applications*, 2nd Ed., Orlando, 
+           FL, Academic Press, Inc., 1980, pg. 222. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+    &gt;&gt;&gt; a = np.array([[1, -2j], [2j, 5]]) 
+    &gt;&gt;&gt; a 
+    array([[ 1.+0.j, -0.-2.j], 
+           [ 0.+2.j,  5.+0.j]]) 
+    &gt;&gt;&gt; w, v = LA.eigh(a) 
+    &gt;&gt;&gt; w; v 
+    array([0.17157288, 5.82842712]) 
+    array([[-0.92387953+0.j        , -0.38268343+0.j        ], # may vary 
+           [ 0.        +0.38268343j,  0.        -0.92387953j]]) 
+ 
+    &gt;&gt;&gt; np.dot(a, v[:, 0]) - w[0] * v[:, 0] # verify 1st e-val/vec pair 
+    array([5.55111512e-17+0.0000000e+00j, 0.00000000e+00+1.2490009e-16j]) 
+    &gt;&gt;&gt; np.dot(a, v[:, 1]) - w[1] * v[:, 1] # verify 2nd e-val/vec pair 
+    array([0.+0.j, 0.+0.j]) 
+ 
+    &gt;&gt;&gt; A = np.matrix(a) # what happens if input is a matrix object 
+    &gt;&gt;&gt; A 
+    matrix([[ 1.+0.j, -0.-2.j], 
+            [ 0.+2.j,  5.+0.j]]) 
+    &gt;&gt;&gt; w, v = LA.eigh(A) 
+    &gt;&gt;&gt; w; v 
+    array([0.17157288, 5.82842712]) 
+    matrix([[-0.92387953+0.j        , -0.38268343+0.j        ], # may vary 
+            [ 0.        +0.38268343j,  0.        -0.92387953j]]) 
+ 
+    &gt;&gt;&gt; # demonstrate the treatment of the imaginary part of the diagonal 
+    &gt;&gt;&gt; a = np.array([[5+2j, 9-2j], [0+2j, 2-1j]]) 
+    &gt;&gt;&gt; a 
+    array([[5.+2.j, 9.-2.j], 
+           [0.+2.j, 2.-1.j]]) 
+    &gt;&gt;&gt; # with UPLO='L' this is numerically equivalent to using LA.eig() with: 
+    &gt;&gt;&gt; b = np.array([[5.+0.j, 0.-2.j], [0.+2.j, 2.-0.j]]) 
+    &gt;&gt;&gt; b 
+    array([[5.+0.j, 0.-2.j], 
+           [0.+2.j, 2.+0.j]]) 
+    &gt;&gt;&gt; wa, va = LA.eigh(a) 
+    &gt;&gt;&gt; wb, vb = LA.eig(b) 
+    &gt;&gt;&gt; wa; wb 
+    array([1., 6.]) 
+    array([6.+0.j, 1.+0.j]) 
+    &gt;&gt;&gt; va; vb 
+    array([[-0.4472136 +0.j        , -0.89442719+0.j        ], # may vary 
+           [ 0.        +0.89442719j,  0.        -0.4472136j ]]) 
+    array([[ 0.89442719+0.j       , -0.        +0.4472136j], 
+           [-0.        +0.4472136j,  0.89442719+0.j       ]]) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">UPLO = UPLO.upper()</span>
+    <span class="s3">if </span><span class="s1">UPLO </span><span class="s3">not in </span><span class="s1">(</span><span class="s2">'L'</span><span class="s3">, </span><span class="s2">'U'</span><span class="s1">):</span>
+        <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;UPLO argument must be 'L' or 'U'&quot;</span><span class="s1">)</span>
+
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+
+    <span class="s1">extobj = get_linalg_error_extobj(</span>
+        <span class="s1">_raise_linalgerror_eigenvalues_nonconvergence)</span>
+    <span class="s3">if </span><span class="s1">UPLO == </span><span class="s2">'L'</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.eigh_lo</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.eigh_up</span>
+
+    <span class="s1">signature = </span><span class="s2">'D-&gt;dD' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;dd'</span>
+    <span class="s1">w</span><span class="s3">, </span><span class="s1">vt = gufunc(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+    <span class="s1">w = w.astype(_realType(result_t)</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s1">vt = vt.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s3">return </span><span class="s1">w</span><span class="s3">, </span><span class="s1">wrap(vt)</span>
+
+
+<span class="s5"># Singular value decomposition</span>
+
+<span class="s3">def </span><span class="s1">_svd_dispatcher(a</span><span class="s3">, </span><span class="s1">full_matrices=</span><span class="s3">None, </span><span class="s1">compute_uv=</span><span class="s3">None, </span><span class="s1">hermitian=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_svd_dispatcher)</span>
+<span class="s3">def </span><span class="s1">svd(a</span><span class="s3">, </span><span class="s1">full_matrices=</span><span class="s3">True, </span><span class="s1">compute_uv=</span><span class="s3">True, </span><span class="s1">hermitian=</span><span class="s3">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Singular Value Decomposition. 
+ 
+    When `a` is a 2D array, it is factorized as ``u @ np.diag(s) @ vh 
+    = (u * s) @ vh``, where `u` and `vh` are 2D unitary arrays and `s` is a 1D 
+    array of `a`'s singular values. When `a` is higher-dimensional, SVD is 
+    applied in stacked mode as explained below. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, N) array_like 
+        A real or complex array with ``a.ndim &gt;= 2``. 
+    full_matrices : bool, optional 
+        If True (default), `u` and `vh` have the shapes ``(..., M, M)`` and 
+        ``(..., N, N)``, respectively.  Otherwise, the shapes are 
+        ``(..., M, K)`` and ``(..., K, N)``, respectively, where 
+        ``K = min(M, N)``. 
+    compute_uv : bool, optional 
+        Whether or not to compute `u` and `vh` in addition to `s`.  True 
+        by default. 
+    hermitian : bool, optional 
+        If True, `a` is assumed to be Hermitian (symmetric if real-valued), 
+        enabling a more efficient method for finding singular values. 
+        Defaults to False. 
+ 
+        .. versionadded:: 1.17.0 
+ 
+    Returns 
+    ------- 
+    u : { (..., M, M), (..., M, K) } array 
+        Unitary array(s). The first ``a.ndim - 2`` dimensions have the same 
+        size as those of the input `a`. The size of the last two dimensions 
+        depends on the value of `full_matrices`. Only returned when 
+        `compute_uv` is True. 
+    s : (..., K) array 
+        Vector(s) with the singular values, within each vector sorted in 
+        descending order. The first ``a.ndim - 2`` dimensions have the same 
+        size as those of the input `a`. 
+    vh : { (..., N, N), (..., K, N) } array 
+        Unitary array(s). The first ``a.ndim - 2`` dimensions have the same 
+        size as those of the input `a`. The size of the last two dimensions 
+        depends on the value of `full_matrices`. Only returned when 
+        `compute_uv` is True. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If SVD computation does not converge. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.svd : Similar function in SciPy. 
+    scipy.linalg.svdvals : Compute singular values of a matrix. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionchanged:: 1.8.0 
+       Broadcasting rules apply, see the `numpy.linalg` documentation for 
+       details. 
+ 
+    The decomposition is performed using LAPACK routine ``_gesdd``. 
+ 
+    SVD is usually described for the factorization of a 2D matrix :math:`A`. 
+    The higher-dimensional case will be discussed below. In the 2D case, SVD is 
+    written as :math:`A = U S V^H`, where :math:`A = a`, :math:`U= u`, 
+    :math:`S= \\mathtt{np.diag}(s)` and :math:`V^H = vh`. The 1D array `s` 
+    contains the singular values of `a` and `u` and `vh` are unitary. The rows 
+    of `vh` are the eigenvectors of :math:`A^H A` and the columns of `u` are 
+    the eigenvectors of :math:`A A^H`. In both cases the corresponding 
+    (possibly non-zero) eigenvalues are given by ``s**2``. 
+ 
+    If `a` has more than two dimensions, then broadcasting rules apply, as 
+    explained in :ref:`routines.linalg-broadcasting`. This means that SVD is 
+    working in &quot;stacked&quot; mode: it iterates over all indices of the first 
+    ``a.ndim - 2`` dimensions and for each combination SVD is applied to the 
+    last two indices. The matrix `a` can be reconstructed from the 
+    decomposition with either ``(u * s[..., None, :]) @ vh`` or 
+    ``u @ (s[..., None] * vh)``. (The ``@`` operator can be replaced by the 
+    function ``np.matmul`` for python versions below 3.5.) 
+ 
+    If `a` is a ``matrix`` object (as opposed to an ``ndarray``), then so are 
+    all the return values. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; a = np.random.randn(9, 6) + 1j*np.random.randn(9, 6) 
+    &gt;&gt;&gt; b = np.random.randn(2, 7, 8, 3) + 1j*np.random.randn(2, 7, 8, 3) 
+ 
+    Reconstruction based on full SVD, 2D case: 
+ 
+    &gt;&gt;&gt; u, s, vh = np.linalg.svd(a, full_matrices=True) 
+    &gt;&gt;&gt; u.shape, s.shape, vh.shape 
+    ((9, 9), (6,), (6, 6)) 
+    &gt;&gt;&gt; np.allclose(a, np.dot(u[:, :6] * s, vh)) 
+    True 
+    &gt;&gt;&gt; smat = np.zeros((9, 6), dtype=complex) 
+    &gt;&gt;&gt; smat[:6, :6] = np.diag(s) 
+    &gt;&gt;&gt; np.allclose(a, np.dot(u, np.dot(smat, vh))) 
+    True 
+ 
+    Reconstruction based on reduced SVD, 2D case: 
+ 
+    &gt;&gt;&gt; u, s, vh = np.linalg.svd(a, full_matrices=False) 
+    &gt;&gt;&gt; u.shape, s.shape, vh.shape 
+    ((9, 6), (6,), (6, 6)) 
+    &gt;&gt;&gt; np.allclose(a, np.dot(u * s, vh)) 
+    True 
+    &gt;&gt;&gt; smat = np.diag(s) 
+    &gt;&gt;&gt; np.allclose(a, np.dot(u, np.dot(smat, vh))) 
+    True 
+ 
+    Reconstruction based on full SVD, 4D case: 
+ 
+    &gt;&gt;&gt; u, s, vh = np.linalg.svd(b, full_matrices=True) 
+    &gt;&gt;&gt; u.shape, s.shape, vh.shape 
+    ((2, 7, 8, 8), (2, 7, 3), (2, 7, 3, 3)) 
+    &gt;&gt;&gt; np.allclose(b, np.matmul(u[..., :3] * s[..., None, :], vh)) 
+    True 
+    &gt;&gt;&gt; np.allclose(b, np.matmul(u[..., :3], s[..., None] * vh)) 
+    True 
+ 
+    Reconstruction based on reduced SVD, 4D case: 
+ 
+    &gt;&gt;&gt; u, s, vh = np.linalg.svd(b, full_matrices=False) 
+    &gt;&gt;&gt; u.shape, s.shape, vh.shape 
+    ((2, 7, 8, 3), (2, 7, 3), (2, 7, 3, 3)) 
+    &gt;&gt;&gt; np.allclose(b, np.matmul(u * s[..., None, :], vh)) 
+    True 
+    &gt;&gt;&gt; np.allclose(b, np.matmul(u, s[..., None] * vh)) 
+    True 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s3">import </span><span class="s1">numpy </span><span class="s3">as </span><span class="s1">_nx</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+
+    <span class="s3">if </span><span class="s1">hermitian:</span>
+        <span class="s5"># note: lapack svd returns eigenvalues with s ** 2 sorted descending,</span>
+        <span class="s5"># but eig returns s sorted ascending, so we re-order the eigenvalues</span>
+        <span class="s5"># and related arrays to have the correct order</span>
+        <span class="s3">if </span><span class="s1">compute_uv:</span>
+            <span class="s1">s</span><span class="s3">, </span><span class="s1">u = eigh(a)</span>
+            <span class="s1">sgn = sign(s)</span>
+            <span class="s1">s = abs(s)</span>
+            <span class="s1">sidx = argsort(s)[...</span><span class="s3">, </span><span class="s1">::-</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s1">sgn = _nx.take_along_axis(sgn</span><span class="s3">, </span><span class="s1">sidx</span><span class="s3">, </span><span class="s1">axis=-</span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s1">s = _nx.take_along_axis(s</span><span class="s3">, </span><span class="s1">sidx</span><span class="s3">, </span><span class="s1">axis=-</span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s1">u = _nx.take_along_axis(u</span><span class="s3">, </span><span class="s1">sidx[...</span><span class="s3">, None, </span><span class="s1">:]</span><span class="s3">, </span><span class="s1">axis=-</span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s5"># singular values are unsigned, move the sign into v</span>
+            <span class="s1">vt = transpose(u * sgn[...</span><span class="s3">, None, </span><span class="s1">:]).conjugate()</span>
+            <span class="s3">return </span><span class="s1">wrap(u)</span><span class="s3">, </span><span class="s1">s</span><span class="s3">, </span><span class="s1">wrap(vt)</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s1">s = eigvalsh(a)</span>
+            <span class="s1">s = s[...</span><span class="s3">, </span><span class="s1">::-</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s1">s = abs(s)</span>
+            <span class="s3">return </span><span class="s1">sort(s)[...</span><span class="s3">, </span><span class="s1">::-</span><span class="s4">1</span><span class="s1">]</span>
+
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+
+    <span class="s1">extobj = get_linalg_error_extobj(_raise_linalgerror_svd_nonconvergence)</span>
+
+    <span class="s1">m</span><span class="s3">, </span><span class="s1">n = a.shape[-</span><span class="s4">2</span><span class="s1">:]</span>
+    <span class="s3">if </span><span class="s1">compute_uv:</span>
+        <span class="s3">if </span><span class="s1">full_matrices:</span>
+            <span class="s3">if </span><span class="s1">m &lt; n:</span>
+                <span class="s1">gufunc = _umath_linalg.svd_m_f</span>
+            <span class="s3">else</span><span class="s1">:</span>
+                <span class="s1">gufunc = _umath_linalg.svd_n_f</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s3">if </span><span class="s1">m &lt; n:</span>
+                <span class="s1">gufunc = _umath_linalg.svd_m_s</span>
+            <span class="s3">else</span><span class="s1">:</span>
+                <span class="s1">gufunc = _umath_linalg.svd_n_s</span>
+
+        <span class="s1">signature = </span><span class="s2">'D-&gt;DdD' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;ddd'</span>
+        <span class="s1">u</span><span class="s3">, </span><span class="s1">s</span><span class="s3">, </span><span class="s1">vh = gufunc(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+        <span class="s1">u = u.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+        <span class="s1">s = s.astype(_realType(result_t)</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+        <span class="s1">vh = vh.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+        <span class="s3">return </span><span class="s1">wrap(u)</span><span class="s3">, </span><span class="s1">s</span><span class="s3">, </span><span class="s1">wrap(vh)</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">if </span><span class="s1">m &lt; n:</span>
+            <span class="s1">gufunc = _umath_linalg.svd_m</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s1">gufunc = _umath_linalg.svd_n</span>
+
+        <span class="s1">signature = </span><span class="s2">'D-&gt;d' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;d'</span>
+        <span class="s1">s = gufunc(a</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+        <span class="s1">s = s.astype(_realType(result_t)</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+        <span class="s3">return </span><span class="s1">s</span>
+
+
+<span class="s3">def </span><span class="s1">_cond_dispatcher(x</span><span class="s3">, </span><span class="s1">p=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(x</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_cond_dispatcher)</span>
+<span class="s3">def </span><span class="s1">cond(x</span><span class="s3">, </span><span class="s1">p=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the condition number of a matrix. 
+ 
+    This function is capable of returning the condition number using 
+    one of seven different norms, depending on the value of `p` (see 
+    Parameters below). 
+ 
+    Parameters 
+    ---------- 
+    x : (..., M, N) array_like 
+        The matrix whose condition number is sought. 
+    p : {None, 1, -1, 2, -2, inf, -inf, 'fro'}, optional 
+        Order of the norm: 
+ 
+        =====  ============================ 
+        p      norm for matrices 
+        =====  ============================ 
+        None   2-norm, computed directly using the ``SVD`` 
+        'fro'  Frobenius norm 
+        inf    max(sum(abs(x), axis=1)) 
+        -inf   min(sum(abs(x), axis=1)) 
+        1      max(sum(abs(x), axis=0)) 
+        -1     min(sum(abs(x), axis=0)) 
+        2      2-norm (largest sing. value) 
+        -2     smallest singular value 
+        =====  ============================ 
+ 
+        inf means the numpy.inf object, and the Frobenius norm is 
+        the root-of-sum-of-squares norm. 
+ 
+    Returns 
+    ------- 
+    c : {float, inf} 
+        The condition number of the matrix. May be infinite. 
+ 
+    See Also 
+    -------- 
+    numpy.linalg.norm 
+ 
+    Notes 
+    ----- 
+    The condition number of `x` is defined as the norm of `x` times the 
+    norm of the inverse of `x` [1]_; the norm can be the usual L2-norm 
+    (root-of-sum-of-squares) or one of a number of other matrix norms. 
+ 
+    References 
+    ---------- 
+    .. [1] G. Strang, *Linear Algebra and Its Applications*, Orlando, FL, 
+           Academic Press, Inc., 1980, pg. 285. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+    &gt;&gt;&gt; a = np.array([[1, 0, -1], [0, 1, 0], [1, 0, 1]]) 
+    &gt;&gt;&gt; a 
+    array([[ 1,  0, -1], 
+           [ 0,  1,  0], 
+           [ 1,  0,  1]]) 
+    &gt;&gt;&gt; LA.cond(a) 
+    1.4142135623730951 
+    &gt;&gt;&gt; LA.cond(a, 'fro') 
+    3.1622776601683795 
+    &gt;&gt;&gt; LA.cond(a, np.inf) 
+    2.0 
+    &gt;&gt;&gt; LA.cond(a, -np.inf) 
+    1.0 
+    &gt;&gt;&gt; LA.cond(a, 1) 
+    2.0 
+    &gt;&gt;&gt; LA.cond(a, -1) 
+    1.0 
+    &gt;&gt;&gt; LA.cond(a, 2) 
+    1.4142135623730951 
+    &gt;&gt;&gt; LA.cond(a, -2) 
+    0.70710678118654746 # may vary 
+    &gt;&gt;&gt; min(LA.svd(a, compute_uv=False))*min(LA.svd(LA.inv(a), compute_uv=False)) 
+    0.70710678118654746 # may vary 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">x = asarray(x)  </span><span class="s5"># in case we have a matrix</span>
+    <span class="s3">if </span><span class="s1">_is_empty_2d(x):</span>
+        <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">&quot;cond is not defined on empty arrays&quot;</span><span class="s1">)</span>
+    <span class="s3">if </span><span class="s1">p </span><span class="s3">is None or </span><span class="s1">p == </span><span class="s4">2 </span><span class="s3">or </span><span class="s1">p == -</span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s1">s = svd(x</span><span class="s3">, </span><span class="s1">compute_uv=</span><span class="s3">False</span><span class="s1">)</span>
+        <span class="s3">with </span><span class="s1">errstate(all=</span><span class="s2">'ignore'</span><span class="s1">):</span>
+            <span class="s3">if </span><span class="s1">p == -</span><span class="s4">2</span><span class="s1">:</span>
+                <span class="s1">r = s[...</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">] / s[...</span><span class="s3">, </span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s3">else</span><span class="s1">:</span>
+                <span class="s1">r = s[...</span><span class="s3">, </span><span class="s4">0</span><span class="s1">] / s[...</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">]</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s5"># Call inv(x) ignoring errors. The result array will</span>
+        <span class="s5"># contain nans in the entries where inversion failed.</span>
+        <span class="s1">_assert_stacked_2d(x)</span>
+        <span class="s1">_assert_stacked_square(x)</span>
+        <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(x)</span>
+        <span class="s1">signature = </span><span class="s2">'D-&gt;D' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;d'</span>
+        <span class="s3">with </span><span class="s1">errstate(all=</span><span class="s2">'ignore'</span><span class="s1">):</span>
+            <span class="s1">invx = _umath_linalg.inv(x</span><span class="s3">, </span><span class="s1">signature=signature)</span>
+            <span class="s1">r = norm(x</span><span class="s3">, </span><span class="s1">p</span><span class="s3">, </span><span class="s1">axis=(-</span><span class="s4">2</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">)) * norm(invx</span><span class="s3">, </span><span class="s1">p</span><span class="s3">, </span><span class="s1">axis=(-</span><span class="s4">2</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">))</span>
+        <span class="s1">r = r.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+
+    <span class="s5"># Convert nans to infs unless the original array had nan entries</span>
+    <span class="s1">r = asarray(r)</span>
+    <span class="s1">nan_mask = isnan(r)</span>
+    <span class="s3">if </span><span class="s1">nan_mask.any():</span>
+        <span class="s1">nan_mask &amp;= ~isnan(x).any(axis=(-</span><span class="s4">2</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">))</span>
+        <span class="s3">if </span><span class="s1">r.ndim &gt; </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s1">r[nan_mask] = Inf</span>
+        <span class="s3">elif </span><span class="s1">nan_mask:</span>
+            <span class="s1">r[()] = Inf</span>
+
+    <span class="s5"># Convention is to return scalars instead of 0d arrays</span>
+    <span class="s3">if </span><span class="s1">r.ndim == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">r = r[()]</span>
+
+    <span class="s3">return </span><span class="s1">r</span>
+
+
+<span class="s3">def </span><span class="s1">_matrix_rank_dispatcher(M</span><span class="s3">, </span><span class="s1">tol=</span><span class="s3">None, </span><span class="s1">hermitian=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(M</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_matrix_rank_dispatcher)</span>
+<span class="s3">def </span><span class="s1">matrix_rank(M</span><span class="s3">, </span><span class="s1">tol=</span><span class="s3">None, </span><span class="s1">hermitian=</span><span class="s3">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return matrix rank of array using SVD method 
+ 
+    Rank of the array is the number of singular values of the array that are 
+    greater than `tol`. 
+ 
+    .. versionchanged:: 1.14 
+       Can now operate on stacks of matrices 
+ 
+    Parameters 
+    ---------- 
+    M : {(M,), (..., M, N)} array_like 
+        Input vector or stack of matrices. 
+    tol : (...) array_like, float, optional 
+        Threshold below which SVD values are considered zero. If `tol` is 
+        None, and ``S`` is an array with singular values for `M`, and 
+        ``eps`` is the epsilon value for datatype of ``S``, then `tol` is 
+        set to ``S.max() * max(M.shape) * eps``. 
+ 
+        .. versionchanged:: 1.14 
+           Broadcasted against the stack of matrices 
+    hermitian : bool, optional 
+        If True, `M` is assumed to be Hermitian (symmetric if real-valued), 
+        enabling a more efficient method for finding singular values. 
+        Defaults to False. 
+ 
+        .. versionadded:: 1.14 
+ 
+    Returns 
+    ------- 
+    rank : (...) array_like 
+        Rank of M. 
+ 
+    Notes 
+    ----- 
+    The default threshold to detect rank deficiency is a test on the magnitude 
+    of the singular values of `M`.  By default, we identify singular values less 
+    than ``S.max() * max(M.shape) * eps`` as indicating rank deficiency (with 
+    the symbols defined above). This is the algorithm MATLAB uses [1].  It also 
+    appears in *Numerical recipes* in the discussion of SVD solutions for linear 
+    least squares [2]. 
+ 
+    This default threshold is designed to detect rank deficiency accounting for 
+    the numerical errors of the SVD computation.  Imagine that there is a column 
+    in `M` that is an exact (in floating point) linear combination of other 
+    columns in `M`. Computing the SVD on `M` will not produce a singular value 
+    exactly equal to 0 in general: any difference of the smallest SVD value from 
+    0 will be caused by numerical imprecision in the calculation of the SVD. 
+    Our threshold for small SVD values takes this numerical imprecision into 
+    account, and the default threshold will detect such numerical rank 
+    deficiency.  The threshold may declare a matrix `M` rank deficient even if 
+    the linear combination of some columns of `M` is not exactly equal to 
+    another column of `M` but only numerically very close to another column of 
+    `M`. 
+ 
+    We chose our default threshold because it is in wide use.  Other thresholds 
+    are possible.  For example, elsewhere in the 2007 edition of *Numerical 
+    recipes* there is an alternative threshold of ``S.max() * 
+    np.finfo(M.dtype).eps / 2. * np.sqrt(m + n + 1.)``. The authors describe 
+    this threshold as being based on &quot;expected roundoff error&quot; (p 71). 
+ 
+    The thresholds above deal with floating point roundoff error in the 
+    calculation of the SVD.  However, you may have more information about the 
+    sources of error in `M` that would make you consider other tolerance values 
+    to detect *effective* rank deficiency.  The most useful measure of the 
+    tolerance depends on the operations you intend to use on your matrix.  For 
+    example, if your data come from uncertain measurements with uncertainties 
+    greater than floating point epsilon, choosing a tolerance near that 
+    uncertainty may be preferable.  The tolerance may be absolute if the 
+    uncertainties are absolute rather than relative. 
+ 
+    References 
+    ---------- 
+    .. [1] MATLAB reference documention, &quot;Rank&quot; 
+           https://www.mathworks.com/help/techdoc/ref/rank.html 
+    .. [2] W. H. Press, S. A. Teukolsky, W. T. Vetterling and B. P. Flannery, 
+           &quot;Numerical Recipes (3rd edition)&quot;, Cambridge University Press, 2007, 
+           page 795. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy.linalg import matrix_rank 
+    &gt;&gt;&gt; matrix_rank(np.eye(4)) # Full rank matrix 
+    4 
+    &gt;&gt;&gt; I=np.eye(4); I[-1,-1] = 0. # rank deficient matrix 
+    &gt;&gt;&gt; matrix_rank(I) 
+    3 
+    &gt;&gt;&gt; matrix_rank(np.ones((4,))) # 1 dimension - rank 1 unless all 0 
+    1 
+    &gt;&gt;&gt; matrix_rank(np.zeros((4,))) 
+    0 
+    &quot;&quot;&quot;</span>
+    <span class="s1">M = asarray(M)</span>
+    <span class="s3">if </span><span class="s1">M.ndim &lt; </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">int(</span><span class="s3">not </span><span class="s1">all(M==</span><span class="s4">0</span><span class="s1">))</span>
+    <span class="s1">S = svd(M</span><span class="s3">, </span><span class="s1">compute_uv=</span><span class="s3">False, </span><span class="s1">hermitian=hermitian)</span>
+    <span class="s3">if </span><span class="s1">tol </span><span class="s3">is None</span><span class="s1">:</span>
+        <span class="s1">tol = S.max(axis=-</span><span class="s4">1</span><span class="s3">, </span><span class="s1">keepdims=</span><span class="s3">True</span><span class="s1">) * max(M.shape[-</span><span class="s4">2</span><span class="s1">:]) * finfo(S.dtype).eps</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">tol = asarray(tol)[...</span><span class="s3">, </span><span class="s1">newaxis]</span>
+    <span class="s3">return </span><span class="s1">count_nonzero(S &gt; tol</span><span class="s3">, </span><span class="s1">axis=-</span><span class="s4">1</span><span class="s1">)</span>
+
+
+<span class="s5"># Generalized inverse</span>
+
+<span class="s3">def </span><span class="s1">_pinv_dispatcher(a</span><span class="s3">, </span><span class="s1">rcond=</span><span class="s3">None, </span><span class="s1">hermitian=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_pinv_dispatcher)</span>
+<span class="s3">def </span><span class="s1">pinv(a</span><span class="s3">, </span><span class="s1">rcond=</span><span class="s4">1e-15</span><span class="s3">, </span><span class="s1">hermitian=</span><span class="s3">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the (Moore-Penrose) pseudo-inverse of a matrix. 
+ 
+    Calculate the generalized inverse of a matrix using its 
+    singular-value decomposition (SVD) and including all 
+    *large* singular values. 
+ 
+    .. versionchanged:: 1.14 
+       Can now operate on stacks of matrices 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, N) array_like 
+        Matrix or stack of matrices to be pseudo-inverted. 
+    rcond : (...) array_like of float 
+        Cutoff for small singular values. 
+        Singular values less than or equal to 
+        ``rcond * largest_singular_value`` are set to zero. 
+        Broadcasts against the stack of matrices. 
+    hermitian : bool, optional 
+        If True, `a` is assumed to be Hermitian (symmetric if real-valued), 
+        enabling a more efficient method for finding singular values. 
+        Defaults to False. 
+ 
+        .. versionadded:: 1.17.0 
+ 
+    Returns 
+    ------- 
+    B : (..., N, M) ndarray 
+        The pseudo-inverse of `a`. If `a` is a `matrix` instance, then so 
+        is `B`. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If the SVD computation does not converge. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.pinv : Similar function in SciPy. 
+    scipy.linalg.pinv2 : Similar function in SciPy (SVD-based). 
+    scipy.linalg.pinvh : Compute the (Moore-Penrose) pseudo-inverse of a 
+                         Hermitian matrix. 
+ 
+    Notes 
+    ----- 
+    The pseudo-inverse of a matrix A, denoted :math:`A^+`, is 
+    defined as: &quot;the matrix that 'solves' [the least-squares problem] 
+    :math:`Ax = b`,&quot; i.e., if :math:`\\bar{x}` is said solution, then 
+    :math:`A^+` is that matrix such that :math:`\\bar{x} = A^+b`. 
+ 
+    It can be shown that if :math:`Q_1 \\Sigma Q_2^T = A` is the singular 
+    value decomposition of A, then 
+    :math:`A^+ = Q_2 \\Sigma^+ Q_1^T`, where :math:`Q_{1,2}` are 
+    orthogonal matrices, :math:`\\Sigma` is a diagonal matrix consisting 
+    of A's so-called singular values, (followed, typically, by 
+    zeros), and then :math:`\\Sigma^+` is simply the diagonal matrix 
+    consisting of the reciprocals of A's singular values 
+    (again, followed by zeros). [1]_ 
+ 
+    References 
+    ---------- 
+    .. [1] G. Strang, *Linear Algebra and Its Applications*, 2nd Ed., Orlando, 
+           FL, Academic Press, Inc., 1980, pp. 139-142. 
+ 
+    Examples 
+    -------- 
+    The following example checks that ``a * a+ * a == a`` and 
+    ``a+ * a * a+ == a+``: 
+ 
+    &gt;&gt;&gt; a = np.random.randn(9, 6) 
+    &gt;&gt;&gt; B = np.linalg.pinv(a) 
+    &gt;&gt;&gt; np.allclose(a, np.dot(a, np.dot(B, a))) 
+    True 
+    &gt;&gt;&gt; np.allclose(B, np.dot(B, np.dot(a, B))) 
+    True 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">wrap = _makearray(a)</span>
+    <span class="s1">rcond = asarray(rcond)</span>
+    <span class="s3">if </span><span class="s1">_is_empty_2d(a):</span>
+        <span class="s1">m</span><span class="s3">, </span><span class="s1">n = a.shape[-</span><span class="s4">2</span><span class="s1">:]</span>
+        <span class="s1">res = empty(a.shape[:-</span><span class="s4">2</span><span class="s1">] + (n</span><span class="s3">, </span><span class="s1">m)</span><span class="s3">, </span><span class="s1">dtype=a.dtype)</span>
+        <span class="s3">return </span><span class="s1">wrap(res)</span>
+    <span class="s1">a = a.conjugate()</span>
+    <span class="s1">u</span><span class="s3">, </span><span class="s1">s</span><span class="s3">, </span><span class="s1">vt = svd(a</span><span class="s3">, </span><span class="s1">full_matrices=</span><span class="s3">False, </span><span class="s1">hermitian=hermitian)</span>
+
+    <span class="s5"># discard small singular values</span>
+    <span class="s1">cutoff = rcond[...</span><span class="s3">, </span><span class="s1">newaxis] * amax(s</span><span class="s3">, </span><span class="s1">axis=-</span><span class="s4">1</span><span class="s3">, </span><span class="s1">keepdims=</span><span class="s3">True</span><span class="s1">)</span>
+    <span class="s1">large = s &gt; cutoff</span>
+    <span class="s1">s = divide(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">s</span><span class="s3">, </span><span class="s1">where=large</span><span class="s3">, </span><span class="s1">out=s)</span>
+    <span class="s1">s[~large] = </span><span class="s4">0</span>
+
+    <span class="s1">res = matmul(transpose(vt)</span><span class="s3">, </span><span class="s1">multiply(s[...</span><span class="s3">, </span><span class="s1">newaxis]</span><span class="s3">, </span><span class="s1">transpose(u)))</span>
+    <span class="s3">return </span><span class="s1">wrap(res)</span>
+
+
+<span class="s5"># Determinant</span>
+
+
+<span class="s1">@array_function_dispatch(_unary_dispatcher)</span>
+<span class="s3">def </span><span class="s1">slogdet(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the sign and (natural) logarithm of the determinant of an array. 
+ 
+    If an array has a very small or very large determinant, then a call to 
+    `det` may overflow or underflow. This routine is more robust against such 
+    issues, because it computes the logarithm of the determinant rather than 
+    the determinant itself. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        Input array, has to be a square 2-D array. 
+ 
+    Returns 
+    ------- 
+    sign : (...) array_like 
+        A number representing the sign of the determinant. For a real matrix, 
+        this is 1, 0, or -1. For a complex matrix, this is a complex number 
+        with absolute value 1 (i.e., it is on the unit circle), or else 0. 
+    logdet : (...) array_like 
+        The natural log of the absolute value of the determinant. 
+ 
+    If the determinant is zero, then `sign` will be 0 and `logdet` will be 
+    -Inf. In all cases, the determinant is equal to ``sign * np.exp(logdet)``. 
+ 
+    See Also 
+    -------- 
+    det 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    .. versionadded:: 1.6.0 
+ 
+    The determinant is computed via LU factorization using the LAPACK 
+    routine ``z/dgetrf``. 
+ 
+ 
+    Examples 
+    -------- 
+    The determinant of a 2-D array ``[[a, b], [c, d]]`` is ``ad - bc``: 
+ 
+    &gt;&gt;&gt; a = np.array([[1, 2], [3, 4]]) 
+    &gt;&gt;&gt; (sign, logdet) = np.linalg.slogdet(a) 
+    &gt;&gt;&gt; (sign, logdet) 
+    (-1, 0.69314718055994529) # may vary 
+    &gt;&gt;&gt; sign * np.exp(logdet) 
+    -2.0 
+ 
+    Computing log-determinants for a stack of matrices: 
+ 
+    &gt;&gt;&gt; a = np.array([ [[1, 2], [3, 4]], [[1, 2], [2, 1]], [[1, 3], [3, 1]] ]) 
+    &gt;&gt;&gt; a.shape 
+    (3, 2, 2) 
+    &gt;&gt;&gt; sign, logdet = np.linalg.slogdet(a) 
+    &gt;&gt;&gt; (sign, logdet) 
+    (array([-1., -1., -1.]), array([ 0.69314718,  1.09861229,  2.07944154])) 
+    &gt;&gt;&gt; sign * np.exp(logdet) 
+    array([-2., -3., -8.]) 
+ 
+    This routine succeeds where ordinary `det` does not: 
+ 
+    &gt;&gt;&gt; np.linalg.det(np.eye(500) * 0.1) 
+    0.0 
+    &gt;&gt;&gt; np.linalg.slogdet(np.eye(500) * 0.1) 
+    (1, -1151.2925464970228) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a = asarray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+    <span class="s1">real_t = _realType(result_t)</span>
+    <span class="s1">signature = </span><span class="s2">'D-&gt;Dd' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;dd'</span>
+    <span class="s1">sign</span><span class="s3">, </span><span class="s1">logdet = _umath_linalg.slogdet(a</span><span class="s3">, </span><span class="s1">signature=signature)</span>
+    <span class="s1">sign = sign.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s1">logdet = logdet.astype(real_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s3">return </span><span class="s1">sign</span><span class="s3">, </span><span class="s1">logdet</span>
+
+
+<span class="s1">@array_function_dispatch(_unary_dispatcher)</span>
+<span class="s3">def </span><span class="s1">det(a):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the determinant of an array. 
+ 
+    Parameters 
+    ---------- 
+    a : (..., M, M) array_like 
+        Input array to compute determinants for. 
+ 
+    Returns 
+    ------- 
+    det : (...) array_like 
+        Determinant of `a`. 
+ 
+    See Also 
+    -------- 
+    slogdet : Another way to represent the determinant, more suitable 
+      for large matrices where underflow/overflow may occur. 
+    scipy.linalg.det : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+ 
+    .. versionadded:: 1.8.0 
+ 
+    Broadcasting rules apply, see the `numpy.linalg` documentation for 
+    details. 
+ 
+    The determinant is computed via LU factorization using the LAPACK 
+    routine ``z/dgetrf``. 
+ 
+    Examples 
+    -------- 
+    The determinant of a 2-D array [[a, b], [c, d]] is ad - bc: 
+ 
+    &gt;&gt;&gt; a = np.array([[1, 2], [3, 4]]) 
+    &gt;&gt;&gt; np.linalg.det(a) 
+    -2.0 # may vary 
+ 
+    Computing determinants for a stack of matrices: 
+ 
+    &gt;&gt;&gt; a = np.array([ [[1, 2], [3, 4]], [[1, 2], [2, 1]], [[1, 3], [3, 1]] ]) 
+    &gt;&gt;&gt; a.shape 
+    (3, 2, 2) 
+    &gt;&gt;&gt; np.linalg.det(a) 
+    array([-2., -3., -8.]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a = asarray(a)</span>
+    <span class="s1">_assert_stacked_2d(a)</span>
+    <span class="s1">_assert_stacked_square(a)</span>
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a)</span>
+    <span class="s1">signature = </span><span class="s2">'D-&gt;D' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'d-&gt;d'</span>
+    <span class="s1">r = _umath_linalg.det(a</span><span class="s3">, </span><span class="s1">signature=signature)</span>
+    <span class="s1">r = r.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s3">return </span><span class="s1">r</span>
+
+
+<span class="s5"># Linear Least Squares</span>
+
+<span class="s3">def </span><span class="s1">_lstsq_dispatcher(a</span><span class="s3">, </span><span class="s1">b</span><span class="s3">, </span><span class="s1">rcond=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(a</span><span class="s3">, </span><span class="s1">b)</span>
+
+
+<span class="s1">@array_function_dispatch(_lstsq_dispatcher)</span>
+<span class="s3">def </span><span class="s1">lstsq(a</span><span class="s3">, </span><span class="s1">b</span><span class="s3">, </span><span class="s1">rcond=</span><span class="s2">&quot;warn&quot;</span><span class="s1">):</span>
+    <span class="s0">r&quot;&quot;&quot; 
+    Return the least-squares solution to a linear matrix equation. 
+ 
+    Computes the vector x that approximatively solves the equation 
+    ``a @ x = b``. The equation may be under-, well-, or over-determined 
+    (i.e., the number of linearly independent rows of `a` can be less than, 
+    equal to, or greater than its number of linearly independent columns). 
+    If `a` is square and of full rank, then `x` (but for round-off error) 
+    is the &quot;exact&quot; solution of the equation. Else, `x` minimizes the 
+    Euclidean 2-norm :math:`|| b - a x ||`. 
+ 
+    Parameters 
+    ---------- 
+    a : (M, N) array_like 
+        &quot;Coefficient&quot; matrix. 
+    b : {(M,), (M, K)} array_like 
+        Ordinate or &quot;dependent variable&quot; values. If `b` is two-dimensional, 
+        the least-squares solution is calculated for each of the `K` columns 
+        of `b`. 
+    rcond : float, optional 
+        Cut-off ratio for small singular values of `a`. 
+        For the purposes of rank determination, singular values are treated 
+        as zero if they are smaller than `rcond` times the largest singular 
+        value of `a`. 
+ 
+        .. versionchanged:: 1.14.0 
+           If not set, a FutureWarning is given. The previous default 
+           of ``-1`` will use the machine precision as `rcond` parameter, 
+           the new default will use the machine precision times `max(M, N)`. 
+           To silence the warning and use the new default, use ``rcond=None``, 
+           to keep using the old behavior, use ``rcond=-1``. 
+ 
+    Returns 
+    ------- 
+    x : {(N,), (N, K)} ndarray 
+        Least-squares solution. If `b` is two-dimensional, 
+        the solutions are in the `K` columns of `x`. 
+    residuals : {(1,), (K,), (0,)} ndarray 
+        Sums of squared residuals: Squared Euclidean 2-norm for each column in 
+        ``b - a @ x``. 
+        If the rank of `a` is &lt; N or M &lt;= N, this is an empty array. 
+        If `b` is 1-dimensional, this is a (1,) shape array. 
+        Otherwise the shape is (K,). 
+    rank : int 
+        Rank of matrix `a`. 
+    s : (min(M, N),) ndarray 
+        Singular values of `a`. 
+ 
+    Raises 
+    ------ 
+    LinAlgError 
+        If computation does not converge. 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.lstsq : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+    If `b` is a matrix, then all array results are returned as matrices. 
+ 
+    Examples 
+    -------- 
+    Fit a line, ``y = mx + c``, through some noisy data-points: 
+ 
+    &gt;&gt;&gt; x = np.array([0, 1, 2, 3]) 
+    &gt;&gt;&gt; y = np.array([-1, 0.2, 0.9, 2.1]) 
+ 
+    By examining the coefficients, we see that the line should have a 
+    gradient of roughly 1 and cut the y-axis at, more or less, -1. 
+ 
+    We can rewrite the line equation as ``y = Ap``, where ``A = [[x 1]]`` 
+    and ``p = [[m], [c]]``.  Now use `lstsq` to solve for `p`: 
+ 
+    &gt;&gt;&gt; A = np.vstack([x, np.ones(len(x))]).T 
+    &gt;&gt;&gt; A 
+    array([[ 0.,  1.], 
+           [ 1.,  1.], 
+           [ 2.,  1.], 
+           [ 3.,  1.]]) 
+ 
+    &gt;&gt;&gt; m, c = np.linalg.lstsq(A, y, rcond=None)[0] 
+    &gt;&gt;&gt; m, c 
+    (1.0 -0.95) # may vary 
+ 
+    Plot the data along with the fitted line: 
+ 
+    &gt;&gt;&gt; import matplotlib.pyplot as plt 
+    &gt;&gt;&gt; _ = plt.plot(x, y, 'o', label='Original data', markersize=10) 
+    &gt;&gt;&gt; _ = plt.plot(x, m*x + c, 'r', label='Fitted line') 
+    &gt;&gt;&gt; _ = plt.legend() 
+    &gt;&gt;&gt; plt.show() 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a</span><span class="s3">, </span><span class="s1">_ = _makearray(a)</span>
+    <span class="s1">b</span><span class="s3">, </span><span class="s1">wrap = _makearray(b)</span>
+    <span class="s1">is_1d = b.ndim == </span><span class="s4">1</span>
+    <span class="s3">if </span><span class="s1">is_1d:</span>
+        <span class="s1">b = b[:</span><span class="s3">, </span><span class="s1">newaxis]</span>
+    <span class="s1">_assert_2d(a</span><span class="s3">, </span><span class="s1">b)</span>
+    <span class="s1">m</span><span class="s3">, </span><span class="s1">n = a.shape[-</span><span class="s4">2</span><span class="s1">:]</span>
+    <span class="s1">m2</span><span class="s3">, </span><span class="s1">n_rhs = b.shape[-</span><span class="s4">2</span><span class="s1">:]</span>
+    <span class="s3">if </span><span class="s1">m != m2:</span>
+        <span class="s3">raise </span><span class="s1">LinAlgError(</span><span class="s2">'Incompatible dimensions'</span><span class="s1">)</span>
+
+    <span class="s1">t</span><span class="s3">, </span><span class="s1">result_t = _commonType(a</span><span class="s3">, </span><span class="s1">b)</span>
+    <span class="s5"># FIXME: real_t is unused</span>
+    <span class="s1">real_t = _linalgRealType(t)</span>
+    <span class="s1">result_real_t = _realType(result_t)</span>
+
+    <span class="s5"># Determine default rcond value</span>
+    <span class="s3">if </span><span class="s1">rcond == </span><span class="s2">&quot;warn&quot;</span><span class="s1">:</span>
+        <span class="s5"># 2017-08-19, 1.14.0</span>
+        <span class="s1">warnings.warn(</span><span class="s2">&quot;`rcond` parameter will change to the default of &quot;</span>
+                      <span class="s2">&quot;machine precision times ``max(M, N)`` where M and N &quot;</span>
+                      <span class="s2">&quot;are the input matrix dimensions.</span><span class="s3">\n</span><span class="s2">&quot;</span>
+                      <span class="s2">&quot;To use the future default and silence this warning &quot;</span>
+                      <span class="s2">&quot;we advise to pass `rcond=None`, to keep using the old, &quot;</span>
+                      <span class="s2">&quot;explicitly pass `rcond=-1`.&quot;</span><span class="s3">,</span>
+                      <span class="s1">FutureWarning</span><span class="s3">, </span><span class="s1">stacklevel=</span><span class="s4">3</span><span class="s1">)</span>
+        <span class="s1">rcond = -</span><span class="s4">1</span>
+    <span class="s3">if </span><span class="s1">rcond </span><span class="s3">is None</span><span class="s1">:</span>
+        <span class="s1">rcond = finfo(t).eps * max(n</span><span class="s3">, </span><span class="s1">m)</span>
+
+    <span class="s3">if </span><span class="s1">m &lt;= n:</span>
+        <span class="s1">gufunc = _umath_linalg.lstsq_m</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">gufunc = _umath_linalg.lstsq_n</span>
+
+    <span class="s1">signature = </span><span class="s2">'DDd-&gt;Ddid' </span><span class="s3">if </span><span class="s1">isComplexType(t) </span><span class="s3">else </span><span class="s2">'ddd-&gt;ddid'</span>
+    <span class="s1">extobj = get_linalg_error_extobj(_raise_linalgerror_lstsq)</span>
+    <span class="s3">if </span><span class="s1">n_rhs == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s5"># lapack can't handle n_rhs = 0 - so allocate the array one larger in that axis</span>
+        <span class="s1">b = zeros(b.shape[:-</span><span class="s4">2</span><span class="s1">] + (m</span><span class="s3">, </span><span class="s1">n_rhs + </span><span class="s4">1</span><span class="s1">)</span><span class="s3">, </span><span class="s1">dtype=b.dtype)</span>
+    <span class="s1">x</span><span class="s3">, </span><span class="s1">resids</span><span class="s3">, </span><span class="s1">rank</span><span class="s3">, </span><span class="s1">s = gufunc(a</span><span class="s3">, </span><span class="s1">b</span><span class="s3">, </span><span class="s1">rcond</span><span class="s3">, </span><span class="s1">signature=signature</span><span class="s3">, </span><span class="s1">extobj=extobj)</span>
+    <span class="s3">if </span><span class="s1">m == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">x[...] = </span><span class="s4">0</span>
+    <span class="s3">if </span><span class="s1">n_rhs == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s5"># remove the item we added</span>
+        <span class="s1">x = x[...</span><span class="s3">, </span><span class="s1">:n_rhs]</span>
+        <span class="s1">resids = resids[...</span><span class="s3">, </span><span class="s1">:n_rhs]</span>
+
+    <span class="s5"># remove the axis we added</span>
+    <span class="s3">if </span><span class="s1">is_1d:</span>
+        <span class="s1">x = x.squeeze(axis=-</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s5"># we probably should squeeze resids too, but we can't</span>
+        <span class="s5"># without breaking compatibility.</span>
+
+    <span class="s5"># as documented</span>
+    <span class="s3">if </span><span class="s1">rank != n </span><span class="s3">or </span><span class="s1">m &lt;= n:</span>
+        <span class="s1">resids = array([]</span><span class="s3">, </span><span class="s1">result_real_t)</span>
+
+    <span class="s5"># coerce output arrays</span>
+    <span class="s1">s = s.astype(result_real_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s1">resids = resids.astype(result_real_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">False</span><span class="s1">)</span>
+    <span class="s1">x = x.astype(result_t</span><span class="s3">, </span><span class="s1">copy=</span><span class="s3">True</span><span class="s1">)  </span><span class="s5"># Copying lets the memory in r_parts be freed</span>
+    <span class="s3">return </span><span class="s1">wrap(x)</span><span class="s3">, </span><span class="s1">wrap(resids)</span><span class="s3">, </span><span class="s1">rank</span><span class="s3">, </span><span class="s1">s</span>
+
+
+<span class="s3">def </span><span class="s1">_multi_svd_norm(x</span><span class="s3">, </span><span class="s1">row_axis</span><span class="s3">, </span><span class="s1">col_axis</span><span class="s3">, </span><span class="s1">op):</span>
+    <span class="s0">&quot;&quot;&quot;Compute a function of the singular values of the 2-D matrices in `x`. 
+ 
+    This is a private utility function used by `numpy.linalg.norm()`. 
+ 
+    Parameters 
+    ---------- 
+    x : ndarray 
+    row_axis, col_axis : int 
+        The axes of `x` that hold the 2-D matrices. 
+    op : callable 
+        This should be either numpy.amin or `numpy.amax` or `numpy.sum`. 
+ 
+    Returns 
+    ------- 
+    result : float or ndarray 
+        If `x` is 2-D, the return values is a float. 
+        Otherwise, it is an array with ``x.ndim - 2`` dimensions. 
+        The return values are either the minimum or maximum or sum of the 
+        singular values of the matrices, depending on whether `op` 
+        is `numpy.amin` or `numpy.amax` or `numpy.sum`. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">y = moveaxis(x</span><span class="s3">, </span><span class="s1">(row_axis</span><span class="s3">, </span><span class="s1">col_axis)</span><span class="s3">, </span><span class="s1">(-</span><span class="s4">2</span><span class="s3">, </span><span class="s1">-</span><span class="s4">1</span><span class="s1">))</span>
+    <span class="s1">result = op(svd(y</span><span class="s3">, </span><span class="s1">compute_uv=</span><span class="s3">False</span><span class="s1">)</span><span class="s3">, </span><span class="s1">axis=-</span><span class="s4">1</span><span class="s1">)</span>
+    <span class="s3">return </span><span class="s1">result</span>
+
+
+<span class="s3">def </span><span class="s1">_norm_dispatcher(x</span><span class="s3">, </span><span class="s1">ord=</span><span class="s3">None, </span><span class="s1">axis=</span><span class="s3">None, </span><span class="s1">keepdims=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(x</span><span class="s3">,</span><span class="s1">)</span>
+
+
+<span class="s1">@array_function_dispatch(_norm_dispatcher)</span>
+<span class="s3">def </span><span class="s1">norm(x</span><span class="s3">, </span><span class="s1">ord=</span><span class="s3">None, </span><span class="s1">axis=</span><span class="s3">None, </span><span class="s1">keepdims=</span><span class="s3">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Matrix or vector norm. 
+ 
+    This function is able to return one of eight different matrix norms, 
+    or one of an infinite number of vector norms (described below), depending 
+    on the value of the ``ord`` parameter. 
+ 
+    Parameters 
+    ---------- 
+    x : array_like 
+        Input array.  If `axis` is None, `x` must be 1-D or 2-D, unless `ord` 
+        is None. If both `axis` and `ord` are None, the 2-norm of 
+        ``x.ravel`` will be returned. 
+    ord : {non-zero int, inf, -inf, 'fro', 'nuc'}, optional 
+        Order of the norm (see table under ``Notes``). inf means numpy's 
+        `inf` object. The default is None. 
+    axis : {None, int, 2-tuple of ints}, optional. 
+        If `axis` is an integer, it specifies the axis of `x` along which to 
+        compute the vector norms.  If `axis` is a 2-tuple, it specifies the 
+        axes that hold 2-D matrices, and the matrix norms of these matrices 
+        are computed.  If `axis` is None then either a vector norm (when `x` 
+        is 1-D) or a matrix norm (when `x` is 2-D) is returned. The default 
+        is None. 
+ 
+        .. versionadded:: 1.8.0 
+ 
+    keepdims : bool, optional 
+        If this is set to True, the axes which are normed over are left in the 
+        result as dimensions with size one.  With this option the result will 
+        broadcast correctly against the original `x`. 
+ 
+        .. versionadded:: 1.10.0 
+ 
+    Returns 
+    ------- 
+    n : float or ndarray 
+        Norm of the matrix or vector(s). 
+ 
+    See Also 
+    -------- 
+    scipy.linalg.norm : Similar function in SciPy. 
+ 
+    Notes 
+    ----- 
+    For values of ``ord &lt; 1``, the result is, strictly speaking, not a 
+    mathematical 'norm', but it may still be useful for various numerical 
+    purposes. 
+ 
+    The following norms can be calculated: 
+ 
+    =====  ============================  ========================== 
+    ord    norm for matrices             norm for vectors 
+    =====  ============================  ========================== 
+    None   Frobenius norm                2-norm 
+    'fro'  Frobenius norm                -- 
+    'nuc'  nuclear norm                  -- 
+    inf    max(sum(abs(x), axis=1))      max(abs(x)) 
+    -inf   min(sum(abs(x), axis=1))      min(abs(x)) 
+    0      --                            sum(x != 0) 
+    1      max(sum(abs(x), axis=0))      as below 
+    -1     min(sum(abs(x), axis=0))      as below 
+    2      2-norm (largest sing. value)  as below 
+    -2     smallest singular value       as below 
+    other  --                            sum(abs(x)**ord)**(1./ord) 
+    =====  ============================  ========================== 
+ 
+    The Frobenius norm is given by [1]_: 
+ 
+        :math:`||A||_F = [\\sum_{i,j} abs(a_{i,j})^2]^{1/2}` 
+ 
+    The nuclear norm is the sum of the singular values. 
+ 
+    Both the Frobenius and nuclear norm orders are only defined for 
+    matrices and raise a ValueError when ``x.ndim != 2``. 
+ 
+    References 
+    ---------- 
+    .. [1] G. H. Golub and C. F. Van Loan, *Matrix Computations*, 
+           Baltimore, MD, Johns Hopkins University Press, 1985, pg. 15 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; from numpy import linalg as LA 
+    &gt;&gt;&gt; a = np.arange(9) - 4 
+    &gt;&gt;&gt; a 
+    array([-4, -3, -2, ...,  2,  3,  4]) 
+    &gt;&gt;&gt; b = a.reshape((3, 3)) 
+    &gt;&gt;&gt; b 
+    array([[-4, -3, -2], 
+           [-1,  0,  1], 
+           [ 2,  3,  4]]) 
+ 
+    &gt;&gt;&gt; LA.norm(a) 
+    7.745966692414834 
+    &gt;&gt;&gt; LA.norm(b) 
+    7.745966692414834 
+    &gt;&gt;&gt; LA.norm(b, 'fro') 
+    7.745966692414834 
+    &gt;&gt;&gt; LA.norm(a, np.inf) 
+    4.0 
+    &gt;&gt;&gt; LA.norm(b, np.inf) 
+    9.0 
+    &gt;&gt;&gt; LA.norm(a, -np.inf) 
+    0.0 
+    &gt;&gt;&gt; LA.norm(b, -np.inf) 
+    2.0 
+ 
+    &gt;&gt;&gt; LA.norm(a, 1) 
+    20.0 
+    &gt;&gt;&gt; LA.norm(b, 1) 
+    7.0 
+    &gt;&gt;&gt; LA.norm(a, -1) 
+    -4.6566128774142013e-010 
+    &gt;&gt;&gt; LA.norm(b, -1) 
+    6.0 
+    &gt;&gt;&gt; LA.norm(a, 2) 
+    7.745966692414834 
+    &gt;&gt;&gt; LA.norm(b, 2) 
+    7.3484692283495345 
+ 
+    &gt;&gt;&gt; LA.norm(a, -2) 
+    0.0 
+    &gt;&gt;&gt; LA.norm(b, -2) 
+    1.8570331885190563e-016 # may vary 
+    &gt;&gt;&gt; LA.norm(a, 3) 
+    5.8480354764257312 # may vary 
+    &gt;&gt;&gt; LA.norm(a, -3) 
+    0.0 
+ 
+    Using the `axis` argument to compute vector norms: 
+ 
+    &gt;&gt;&gt; c = np.array([[ 1, 2, 3], 
+    ...               [-1, 1, 4]]) 
+    &gt;&gt;&gt; LA.norm(c, axis=0) 
+    array([ 1.41421356,  2.23606798,  5.        ]) 
+    &gt;&gt;&gt; LA.norm(c, axis=1) 
+    array([ 3.74165739,  4.24264069]) 
+    &gt;&gt;&gt; LA.norm(c, ord=1, axis=1) 
+    array([ 6.,  6.]) 
+ 
+    Using the `axis` argument to compute matrix norms: 
+ 
+    &gt;&gt;&gt; m = np.arange(8).reshape(2,2,2) 
+    &gt;&gt;&gt; LA.norm(m, axis=(1,2)) 
+    array([  3.74165739,  11.22497216]) 
+    &gt;&gt;&gt; LA.norm(m[0, :, :]), LA.norm(m[1, :, :]) 
+    (3.7416573867739413, 11.224972160321824) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">x = asarray(x)</span>
+
+    <span class="s3">if not </span><span class="s1">issubclass(x.dtype.type</span><span class="s3">, </span><span class="s1">(inexact</span><span class="s3">, </span><span class="s1">object_)):</span>
+        <span class="s1">x = x.astype(float)</span>
+
+    <span class="s5"># Immediately handle some default, simple, fast, and common cases.</span>
+    <span class="s3">if </span><span class="s1">axis </span><span class="s3">is None</span><span class="s1">:</span>
+        <span class="s1">ndim = x.ndim</span>
+        <span class="s3">if </span><span class="s1">((ord </span><span class="s3">is None</span><span class="s1">) </span><span class="s3">or</span>
+            <span class="s1">(ord </span><span class="s3">in </span><span class="s1">(</span><span class="s2">'f'</span><span class="s3">, </span><span class="s2">'fro'</span><span class="s1">) </span><span class="s3">and </span><span class="s1">ndim == </span><span class="s4">2</span><span class="s1">) </span><span class="s3">or</span>
+            <span class="s1">(ord == </span><span class="s4">2 </span><span class="s3">and </span><span class="s1">ndim == </span><span class="s4">1</span><span class="s1">)):</span>
+
+            <span class="s1">x = x.ravel(order=</span><span class="s2">'K'</span><span class="s1">)</span>
+            <span class="s3">if </span><span class="s1">isComplexType(x.dtype.type):</span>
+                <span class="s1">sqnorm = dot(x.real</span><span class="s3">, </span><span class="s1">x.real) + dot(x.imag</span><span class="s3">, </span><span class="s1">x.imag)</span>
+            <span class="s3">else</span><span class="s1">:</span>
+                <span class="s1">sqnorm = dot(x</span><span class="s3">, </span><span class="s1">x)</span>
+            <span class="s1">ret = sqrt(sqnorm)</span>
+            <span class="s3">if </span><span class="s1">keepdims:</span>
+                <span class="s1">ret = ret.reshape(ndim*[</span><span class="s4">1</span><span class="s1">])</span>
+            <span class="s3">return </span><span class="s1">ret</span>
+
+    <span class="s5"># Normalize the `axis` argument to a tuple.</span>
+    <span class="s1">nd = x.ndim</span>
+    <span class="s3">if </span><span class="s1">axis </span><span class="s3">is None</span><span class="s1">:</span>
+        <span class="s1">axis = tuple(range(nd))</span>
+    <span class="s3">elif not </span><span class="s1">isinstance(axis</span><span class="s3">, </span><span class="s1">tuple):</span>
+        <span class="s3">try</span><span class="s1">:</span>
+            <span class="s1">axis = int(axis)</span>
+        <span class="s3">except </span><span class="s1">Exception </span><span class="s3">as </span><span class="s1">e:</span>
+            <span class="s3">raise </span><span class="s1">TypeError(</span><span class="s2">&quot;'axis' must be None, an integer or a tuple of integers&quot;</span><span class="s1">) </span><span class="s3">from </span><span class="s1">e</span>
+        <span class="s1">axis = (axis</span><span class="s3">,</span><span class="s1">)</span>
+
+    <span class="s3">if </span><span class="s1">len(axis) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s3">if </span><span class="s1">ord == Inf:</span>
+            <span class="s3">return </span><span class="s1">abs(x).max(axis=axis</span><span class="s3">, </span><span class="s1">keepdims=keepdims)</span>
+        <span class="s3">elif </span><span class="s1">ord == -Inf:</span>
+            <span class="s3">return </span><span class="s1">abs(x).min(axis=axis</span><span class="s3">, </span><span class="s1">keepdims=keepdims)</span>
+        <span class="s3">elif </span><span class="s1">ord == </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s5"># Zero norm</span>
+            <span class="s3">return </span><span class="s1">(x != </span><span class="s4">0</span><span class="s1">).astype(x.real.dtype).sum(axis=axis</span><span class="s3">, </span><span class="s1">keepdims=keepdims)</span>
+        <span class="s3">elif </span><span class="s1">ord == </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s5"># special case for speedup</span>
+            <span class="s3">return </span><span class="s1">add.reduce(abs(x)</span><span class="s3">, </span><span class="s1">axis=axis</span><span class="s3">, </span><span class="s1">keepdims=keepdims)</span>
+        <span class="s3">elif </span><span class="s1">ord </span><span class="s3">is None or </span><span class="s1">ord == </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s5"># special case for speedup</span>
+            <span class="s1">s = (x.conj() * x).real</span>
+            <span class="s3">return </span><span class="s1">sqrt(add.reduce(s</span><span class="s3">, </span><span class="s1">axis=axis</span><span class="s3">, </span><span class="s1">keepdims=keepdims))</span>
+        <span class="s5"># None of the str-type keywords for ord ('fro', 'nuc')</span>
+        <span class="s5"># are valid for vectors</span>
+        <span class="s3">elif </span><span class="s1">isinstance(ord</span><span class="s3">, </span><span class="s1">str):</span>
+            <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">f&quot;Invalid norm order '</span><span class="s3">{</span><span class="s1">ord</span><span class="s3">}</span><span class="s2">' for vectors&quot;</span><span class="s1">)</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s1">absx = abs(x)</span>
+            <span class="s1">absx **= ord</span>
+            <span class="s1">ret = add.reduce(absx</span><span class="s3">, </span><span class="s1">axis=axis</span><span class="s3">, </span><span class="s1">keepdims=keepdims)</span>
+            <span class="s1">ret **= (</span><span class="s4">1 </span><span class="s1">/ ord)</span>
+            <span class="s3">return </span><span class="s1">ret</span>
+    <span class="s3">elif </span><span class="s1">len(axis) == </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s1">row_axis</span><span class="s3">, </span><span class="s1">col_axis = axis</span>
+        <span class="s1">row_axis = normalize_axis_index(row_axis</span><span class="s3">, </span><span class="s1">nd)</span>
+        <span class="s1">col_axis = normalize_axis_index(col_axis</span><span class="s3">, </span><span class="s1">nd)</span>
+        <span class="s3">if </span><span class="s1">row_axis == col_axis:</span>
+            <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">'Duplicate axes given.'</span><span class="s1">)</span>
+        <span class="s3">if </span><span class="s1">ord == </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s1">ret =  _multi_svd_norm(x</span><span class="s3">, </span><span class="s1">row_axis</span><span class="s3">, </span><span class="s1">col_axis</span><span class="s3">, </span><span class="s1">amax)</span>
+        <span class="s3">elif </span><span class="s1">ord == -</span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s1">ret = _multi_svd_norm(x</span><span class="s3">, </span><span class="s1">row_axis</span><span class="s3">, </span><span class="s1">col_axis</span><span class="s3">, </span><span class="s1">amin)</span>
+        <span class="s3">elif </span><span class="s1">ord == </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s3">if </span><span class="s1">col_axis &gt; row_axis:</span>
+                <span class="s1">col_axis -= </span><span class="s4">1</span>
+            <span class="s1">ret = add.reduce(abs(x)</span><span class="s3">, </span><span class="s1">axis=row_axis).max(axis=col_axis)</span>
+        <span class="s3">elif </span><span class="s1">ord == Inf:</span>
+            <span class="s3">if </span><span class="s1">row_axis &gt; col_axis:</span>
+                <span class="s1">row_axis -= </span><span class="s4">1</span>
+            <span class="s1">ret = add.reduce(abs(x)</span><span class="s3">, </span><span class="s1">axis=col_axis).max(axis=row_axis)</span>
+        <span class="s3">elif </span><span class="s1">ord == -</span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s3">if </span><span class="s1">col_axis &gt; row_axis:</span>
+                <span class="s1">col_axis -= </span><span class="s4">1</span>
+            <span class="s1">ret = add.reduce(abs(x)</span><span class="s3">, </span><span class="s1">axis=row_axis).min(axis=col_axis)</span>
+        <span class="s3">elif </span><span class="s1">ord == -Inf:</span>
+            <span class="s3">if </span><span class="s1">row_axis &gt; col_axis:</span>
+                <span class="s1">row_axis -= </span><span class="s4">1</span>
+            <span class="s1">ret = add.reduce(abs(x)</span><span class="s3">, </span><span class="s1">axis=col_axis).min(axis=row_axis)</span>
+        <span class="s3">elif </span><span class="s1">ord </span><span class="s3">in </span><span class="s1">[</span><span class="s3">None, </span><span class="s2">'fro'</span><span class="s3">, </span><span class="s2">'f'</span><span class="s1">]:</span>
+            <span class="s1">ret = sqrt(add.reduce((x.conj() * x).real</span><span class="s3">, </span><span class="s1">axis=axis))</span>
+        <span class="s3">elif </span><span class="s1">ord == </span><span class="s2">'nuc'</span><span class="s1">:</span>
+            <span class="s1">ret = _multi_svd_norm(x</span><span class="s3">, </span><span class="s1">row_axis</span><span class="s3">, </span><span class="s1">col_axis</span><span class="s3">, </span><span class="s1">sum)</span>
+        <span class="s3">else</span><span class="s1">:</span>
+            <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;Invalid norm order for matrices.&quot;</span><span class="s1">)</span>
+        <span class="s3">if </span><span class="s1">keepdims:</span>
+            <span class="s1">ret_shape = list(x.shape)</span>
+            <span class="s1">ret_shape[axis[</span><span class="s4">0</span><span class="s1">]] = </span><span class="s4">1</span>
+            <span class="s1">ret_shape[axis[</span><span class="s4">1</span><span class="s1">]] = </span><span class="s4">1</span>
+            <span class="s1">ret = ret.reshape(ret_shape)</span>
+        <span class="s3">return </span><span class="s1">ret</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;Improper number of dimensions to norm.&quot;</span><span class="s1">)</span>
+
+
+<span class="s5"># multi_dot</span>
+
+<span class="s3">def </span><span class="s1">_multidot_dispatcher(arrays</span><span class="s3">, </span><span class="s1">*</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">yield from </span><span class="s1">arrays</span>
+    <span class="s3">yield </span><span class="s1">out</span>
+
+
+<span class="s1">@array_function_dispatch(_multidot_dispatcher)</span>
+<span class="s3">def </span><span class="s1">multi_dot(arrays</span><span class="s3">, </span><span class="s1">*</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compute the dot product of two or more arrays in a single function call, 
+    while automatically selecting the fastest evaluation order. 
+ 
+    `multi_dot` chains `numpy.dot` and uses optimal parenthesization 
+    of the matrices [1]_ [2]_. Depending on the shapes of the matrices, 
+    this can speed up the multiplication a lot. 
+ 
+    If the first argument is 1-D it is treated as a row vector. 
+    If the last argument is 1-D it is treated as a column vector. 
+    The other arguments must be 2-D. 
+ 
+    Think of `multi_dot` as:: 
+ 
+        def multi_dot(arrays): return functools.reduce(np.dot, arrays) 
+ 
+ 
+    Parameters 
+    ---------- 
+    arrays : sequence of array_like 
+        If the first argument is 1-D it is treated as row vector. 
+        If the last argument is 1-D it is treated as column vector. 
+        The other arguments must be 2-D. 
+    out : ndarray, optional 
+        Output argument. This must have the exact kind that would be returned 
+        if it was not used. In particular, it must have the right type, must be 
+        C-contiguous, and its dtype must be the dtype that would be returned 
+        for `dot(a, b)`. This is a performance feature. Therefore, if these 
+        conditions are not met, an exception is raised, instead of attempting 
+        to be flexible. 
+ 
+        .. versionadded:: 1.19.0 
+ 
+    Returns 
+    ------- 
+    output : ndarray 
+        Returns the dot product of the supplied arrays. 
+ 
+    See Also 
+    -------- 
+    numpy.dot : dot multiplication with two arguments. 
+ 
+    References 
+    ---------- 
+ 
+    .. [1] Cormen, &quot;Introduction to Algorithms&quot;, Chapter 15.2, p. 370-378 
+    .. [2] https://en.wikipedia.org/wiki/Matrix_chain_multiplication 
+ 
+    Examples 
+    -------- 
+    `multi_dot` allows you to write:: 
+ 
+    &gt;&gt;&gt; from numpy.linalg import multi_dot 
+    &gt;&gt;&gt; # Prepare some data 
+    &gt;&gt;&gt; A = np.random.random((10000, 100)) 
+    &gt;&gt;&gt; B = np.random.random((100, 1000)) 
+    &gt;&gt;&gt; C = np.random.random((1000, 5)) 
+    &gt;&gt;&gt; D = np.random.random((5, 333)) 
+    &gt;&gt;&gt; # the actual dot multiplication 
+    &gt;&gt;&gt; _ = multi_dot([A, B, C, D]) 
+ 
+    instead of:: 
+ 
+    &gt;&gt;&gt; _ = np.dot(np.dot(np.dot(A, B), C), D) 
+    &gt;&gt;&gt; # or 
+    &gt;&gt;&gt; _ = A.dot(B).dot(C).dot(D) 
+ 
+    Notes 
+    ----- 
+    The cost for a matrix multiplication can be calculated with the 
+    following function:: 
+ 
+        def cost(A, B): 
+            return A.shape[0] * A.shape[1] * B.shape[1] 
+ 
+    Assume we have three matrices 
+    :math:`A_{10x100}, B_{100x5}, C_{5x50}`. 
+ 
+    The costs for the two different parenthesizations are as follows:: 
+ 
+        cost((AB)C) = 10*100*5 + 10*5*50   = 5000 + 2500   = 7500 
+        cost(A(BC)) = 10*100*50 + 100*5*50 = 50000 + 25000 = 75000 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">n = len(arrays)</span>
+    <span class="s5"># optimization only makes sense for len(arrays) &gt; 2</span>
+    <span class="s3">if </span><span class="s1">n &lt; </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s3">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;Expecting at least two arrays.&quot;</span><span class="s1">)</span>
+    <span class="s3">elif </span><span class="s1">n == </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">dot(arrays[</span><span class="s4">0</span><span class="s1">]</span><span class="s3">, </span><span class="s1">arrays[</span><span class="s4">1</span><span class="s1">]</span><span class="s3">, </span><span class="s1">out=out)</span>
+
+    <span class="s1">arrays = [asanyarray(a) </span><span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays]</span>
+
+    <span class="s5"># save original ndim to reshape the result array into the proper form later</span>
+    <span class="s1">ndim_first</span><span class="s3">, </span><span class="s1">ndim_last = arrays[</span><span class="s4">0</span><span class="s1">].ndim</span><span class="s3">, </span><span class="s1">arrays[-</span><span class="s4">1</span><span class="s1">].ndim</span>
+    <span class="s5"># Explicitly convert vectors to 2D arrays to keep the logic of the internal</span>
+    <span class="s5"># _multi_dot_* functions as simple as possible.</span>
+    <span class="s3">if </span><span class="s1">arrays[</span><span class="s4">0</span><span class="s1">].ndim == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s1">arrays[</span><span class="s4">0</span><span class="s1">] = atleast_2d(arrays[</span><span class="s4">0</span><span class="s1">])</span>
+    <span class="s3">if </span><span class="s1">arrays[-</span><span class="s4">1</span><span class="s1">].ndim == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s1">arrays[-</span><span class="s4">1</span><span class="s1">] = atleast_2d(arrays[-</span><span class="s4">1</span><span class="s1">]).T</span>
+    <span class="s1">_assert_2d(*arrays)</span>
+
+    <span class="s5"># _multi_dot_three is much faster than _multi_dot_matrix_chain_order</span>
+    <span class="s3">if </span><span class="s1">n == </span><span class="s4">3</span><span class="s1">:</span>
+        <span class="s1">result = _multi_dot_three(arrays[</span><span class="s4">0</span><span class="s1">]</span><span class="s3">, </span><span class="s1">arrays[</span><span class="s4">1</span><span class="s1">]</span><span class="s3">, </span><span class="s1">arrays[</span><span class="s4">2</span><span class="s1">]</span><span class="s3">, </span><span class="s1">out=out)</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s1">order = _multi_dot_matrix_chain_order(arrays)</span>
+        <span class="s1">result = _multi_dot(arrays</span><span class="s3">, </span><span class="s1">order</span><span class="s3">, </span><span class="s4">0</span><span class="s3">, </span><span class="s1">n - </span><span class="s4">1</span><span class="s3">, </span><span class="s1">out=out)</span>
+
+    <span class="s5"># return proper shape</span>
+    <span class="s3">if </span><span class="s1">ndim_first == </span><span class="s4">1 </span><span class="s3">and </span><span class="s1">ndim_last == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">result[</span><span class="s4">0</span><span class="s3">, </span><span class="s4">0</span><span class="s1">]  </span><span class="s5"># scalar</span>
+    <span class="s3">elif </span><span class="s1">ndim_first == </span><span class="s4">1 </span><span class="s3">or </span><span class="s1">ndim_last == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">result.ravel()  </span><span class="s5"># 1-D</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">result</span>
+
+
+<span class="s3">def </span><span class="s1">_multi_dot_three(A</span><span class="s3">, </span><span class="s1">B</span><span class="s3">, </span><span class="s1">C</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Find the best order for three arrays and do the multiplication. 
+ 
+    For three arguments `_multi_dot_three` is approximately 15 times faster 
+    than `_multi_dot_matrix_chain_order` 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">a0</span><span class="s3">, </span><span class="s1">a1b0 = A.shape</span>
+    <span class="s1">b1c0</span><span class="s3">, </span><span class="s1">c1 = C.shape</span>
+    <span class="s5"># cost1 = cost((AB)C) = a0*a1b0*b1c0 + a0*b1c0*c1</span>
+    <span class="s1">cost1 = a0 * b1c0 * (a1b0 + c1)</span>
+    <span class="s5"># cost2 = cost(A(BC)) = a1b0*b1c0*c1 + a0*a1b0*c1</span>
+    <span class="s1">cost2 = a1b0 * c1 * (a0 + b1c0)</span>
+
+    <span class="s3">if </span><span class="s1">cost1 &lt; cost2:</span>
+        <span class="s3">return </span><span class="s1">dot(dot(A</span><span class="s3">, </span><span class="s1">B)</span><span class="s3">, </span><span class="s1">C</span><span class="s3">, </span><span class="s1">out=out)</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">dot(A</span><span class="s3">, </span><span class="s1">dot(B</span><span class="s3">, </span><span class="s1">C)</span><span class="s3">, </span><span class="s1">out=out)</span>
+
+
+<span class="s3">def </span><span class="s1">_multi_dot_matrix_chain_order(arrays</span><span class="s3">, </span><span class="s1">return_costs=</span><span class="s3">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return a np.array that encodes the optimal order of mutiplications. 
+ 
+    The optimal order array is then used by `_multi_dot()` to do the 
+    multiplication. 
+ 
+    Also return the cost matrix if `return_costs` is `True` 
+ 
+    The implementation CLOSELY follows Cormen, &quot;Introduction to Algorithms&quot;, 
+    Chapter 15.2, p. 370-378.  Note that Cormen uses 1-based indices. 
+ 
+        cost[i, j] = min([ 
+            cost[prefix] + cost[suffix] + cost_mult(prefix, suffix) 
+            for k in range(i, j)]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">n = len(arrays)</span>
+    <span class="s5"># p stores the dimensions of the matrices</span>
+    <span class="s5"># Example for p: A_{10x100}, B_{100x5}, C_{5x50} --&gt; p = [10, 100, 5, 50]</span>
+    <span class="s1">p = [a.shape[</span><span class="s4">0</span><span class="s1">] </span><span class="s3">for </span><span class="s1">a </span><span class="s3">in </span><span class="s1">arrays] + [arrays[-</span><span class="s4">1</span><span class="s1">].shape[</span><span class="s4">1</span><span class="s1">]]</span>
+    <span class="s5"># m is a matrix of costs of the subproblems</span>
+    <span class="s5"># m[i,j]: min number of scalar multiplications needed to compute A_{i..j}</span>
+    <span class="s1">m = zeros((n</span><span class="s3">, </span><span class="s1">n)</span><span class="s3">, </span><span class="s1">dtype=double)</span>
+    <span class="s5"># s is the actual ordering</span>
+    <span class="s5"># s[i, j] is the value of k at which we split the product A_i..A_j</span>
+    <span class="s1">s = empty((n</span><span class="s3">, </span><span class="s1">n)</span><span class="s3">, </span><span class="s1">dtype=intp)</span>
+
+    <span class="s3">for </span><span class="s1">l </span><span class="s3">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s3">, </span><span class="s1">n):</span>
+        <span class="s3">for </span><span class="s1">i </span><span class="s3">in </span><span class="s1">range(n - l):</span>
+            <span class="s1">j = i + l</span>
+            <span class="s1">m[i</span><span class="s3">, </span><span class="s1">j] = Inf</span>
+            <span class="s3">for </span><span class="s1">k </span><span class="s3">in </span><span class="s1">range(i</span><span class="s3">, </span><span class="s1">j):</span>
+                <span class="s1">q = m[i</span><span class="s3">, </span><span class="s1">k] + m[k+</span><span class="s4">1</span><span class="s3">, </span><span class="s1">j] + p[i]*p[k+</span><span class="s4">1</span><span class="s1">]*p[j+</span><span class="s4">1</span><span class="s1">]</span>
+                <span class="s3">if </span><span class="s1">q &lt; m[i</span><span class="s3">, </span><span class="s1">j]:</span>
+                    <span class="s1">m[i</span><span class="s3">, </span><span class="s1">j] = q</span>
+                    <span class="s1">s[i</span><span class="s3">, </span><span class="s1">j] = k  </span><span class="s5"># Note that Cormen uses 1-based index</span>
+
+    <span class="s3">return </span><span class="s1">(s</span><span class="s3">, </span><span class="s1">m) </span><span class="s3">if </span><span class="s1">return_costs </span><span class="s3">else </span><span class="s1">s</span>
+
+
+<span class="s3">def </span><span class="s1">_multi_dot(arrays</span><span class="s3">, </span><span class="s1">order</span><span class="s3">, </span><span class="s1">i</span><span class="s3">, </span><span class="s1">j</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Actually do the multiplication with the given order.&quot;&quot;&quot;</span>
+    <span class="s3">if </span><span class="s1">i == j:</span>
+        <span class="s5"># the initial call with non-None out should never get here</span>
+        <span class="s3">assert </span><span class="s1">out </span><span class="s3">is None</span>
+
+        <span class="s3">return </span><span class="s1">arrays[i]</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">dot(_multi_dot(arrays</span><span class="s3">, </span><span class="s1">order</span><span class="s3">, </span><span class="s1">i</span><span class="s3">, </span><span class="s1">order[i</span><span class="s3">, </span><span class="s1">j])</span><span class="s3">,</span>
+                   <span class="s1">_multi_dot(arrays</span><span class="s3">, </span><span class="s1">order</span><span class="s3">, </span><span class="s1">order[i</span><span class="s3">, </span><span class="s1">j] + </span><span class="s4">1</span><span class="s3">, </span><span class="s1">j)</span><span class="s3">,</span>
+                   <span class="s1">out=out)</span>
+</pre>
+</body>
+</html>

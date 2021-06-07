@@ -1,0 +1,31 @@
+<html>
+<head>
+<title>cpu_avx512_knl.c</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6897bb;}
+.s3 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+cpu_avx512_knl.c</font>
+</center></td></tr></table>
+<pre><span class="s0">#include </span><span class="s1">&lt;immintrin.h&gt;</span>
+
+<span class="s0">int </span><span class="s1">main(</span><span class="s0">void</span><span class="s1">)</span>
+<span class="s1">{</span>
+    <span class="s0">int </span><span class="s1">base[</span><span class="s2">128</span><span class="s1">];</span>
+    <span class="s3">/* ER */</span>
+    <span class="s1">__m512i a = _mm512_castpd_si512(_mm512_exp2a23_pd(_mm512_setzero_pd()));</span>
+    <span class="s3">/* PF */</span>
+    <span class="s1">_mm512_mask_prefetch_i64scatter_pd(base, _mm512_cmpeq_epi64_mask(a, a), a, </span><span class="s2">1</span><span class="s1">, _MM_HINT_T1);</span>
+    <span class="s0">return </span><span class="s1">base[</span><span class="s2">0</span><span class="s1">];</span>
+<span class="s1">}</span>
+</pre>
+</body>
+</html>

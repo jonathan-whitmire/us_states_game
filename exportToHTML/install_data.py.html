@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>install_data.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+install_data.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s1">have_setuptools = (</span><span class="s2">'setuptools' </span><span class="s0">in </span><span class="s1">sys.modules)</span>
+
+<span class="s0">from </span><span class="s1">distutils.command.install_data </span><span class="s0">import </span><span class="s1">install_data </span><span class="s0">as </span><span class="s1">old_install_data</span>
+
+<span class="s3">#data installer with improved intelligence over distutils</span>
+<span class="s3">#data files are copied into the project directory instead</span>
+<span class="s3">#of willy-nilly</span>
+<span class="s0">class </span><span class="s1">install_data (old_install_data):</span>
+
+    <span class="s0">def </span><span class="s1">run(self):</span>
+        <span class="s1">old_install_data.run(self)</span>
+
+        <span class="s0">if </span><span class="s1">have_setuptools:</span>
+            <span class="s3"># Run install_clib again, since setuptools does not run sub-commands</span>
+            <span class="s3"># of install automatically</span>
+            <span class="s1">self.run_command(</span><span class="s2">'install_clib'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">finalize_options (self):</span>
+        <span class="s1">self.set_undefined_options(</span><span class="s2">'install'</span><span class="s0">,</span>
+                                   <span class="s1">(</span><span class="s2">'install_lib'</span><span class="s0">, </span><span class="s2">'install_dir'</span><span class="s1">)</span><span class="s0">,</span>
+                                   <span class="s1">(</span><span class="s2">'root'</span><span class="s0">, </span><span class="s2">'root'</span><span class="s1">)</span><span class="s0">,</span>
+                                   <span class="s1">(</span><span class="s2">'force'</span><span class="s0">, </span><span class="s2">'force'</span><span class="s1">)</span><span class="s0">,</span>
+                                  <span class="s1">)</span>
+</pre>
+</body>
+</html>

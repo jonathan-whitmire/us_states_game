@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>test_build.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #6897bb;}
+.s4 { color: #a5c261;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_build.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">subprocess </span><span class="s0">import </span><span class="s1">PIPE</span><span class="s0">, </span><span class="s1">Popen</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">import </span><span class="s1">pytest</span>
+
+<span class="s0">from </span><span class="s1">numpy.linalg </span><span class="s0">import </span><span class="s1">lapack_lite</span>
+<span class="s0">from </span><span class="s1">numpy.testing </span><span class="s0">import </span><span class="s1">assert_</span>
+
+
+<span class="s0">class </span><span class="s1">FindDependenciesLdd:</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.cmd = [</span><span class="s2">'ldd'</span><span class="s1">]</span>
+
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">p = Popen(self.cmd</span><span class="s0">, </span><span class="s1">stdout=PIPE</span><span class="s0">, </span><span class="s1">stderr=PIPE)</span>
+            <span class="s1">stdout</span><span class="s0">, </span><span class="s1">stderr = p.communicate()</span>
+        <span class="s0">except </span><span class="s1">OSError:</span>
+            <span class="s0">raise </span><span class="s1">RuntimeError(</span><span class="s2">f'command </span><span class="s0">{</span><span class="s1">self.cmd</span><span class="s0">} </span><span class="s2">cannot be run'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">get_dependencies(self</span><span class="s0">, </span><span class="s1">lfile):</span>
+        <span class="s1">p = Popen(self.cmd + [lfile]</span><span class="s0">, </span><span class="s1">stdout=PIPE</span><span class="s0">, </span><span class="s1">stderr=PIPE)</span>
+        <span class="s1">stdout</span><span class="s0">, </span><span class="s1">stderr = p.communicate()</span>
+        <span class="s0">if not </span><span class="s1">(p.returncode == </span><span class="s3">0</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">RuntimeError(</span><span class="s2">f'failed dependencies check for </span><span class="s0">{</span><span class="s1">lfile</span><span class="s0">}</span><span class="s2">'</span><span class="s1">)</span>
+
+        <span class="s0">return </span><span class="s1">stdout</span>
+
+    <span class="s0">def </span><span class="s1">grep_dependencies(self</span><span class="s0">, </span><span class="s1">lfile</span><span class="s0">, </span><span class="s1">deps):</span>
+        <span class="s1">stdout = self.get_dependencies(lfile)</span>
+
+        <span class="s1">rdeps = dict([(dep</span><span class="s0">, </span><span class="s1">re.compile(dep)) </span><span class="s0">for </span><span class="s1">dep </span><span class="s0">in </span><span class="s1">deps])</span>
+        <span class="s1">founds = []</span>
+        <span class="s0">for </span><span class="s1">l </span><span class="s0">in </span><span class="s1">stdout.splitlines():</span>
+            <span class="s0">for </span><span class="s1">k</span><span class="s0">, </span><span class="s1">v </span><span class="s0">in </span><span class="s1">rdeps.items():</span>
+                <span class="s0">if </span><span class="s1">v.search(l):</span>
+                    <span class="s1">founds.append(k)</span>
+
+        <span class="s0">return </span><span class="s1">founds</span>
+
+
+<span class="s0">class </span><span class="s1">TestF77Mismatch:</span>
+
+    <span class="s1">@pytest.mark.skipif(</span><span class="s0">not</span><span class="s1">(sys.platform[:</span><span class="s3">5</span><span class="s1">] == </span><span class="s2">'linux'</span><span class="s1">)</span><span class="s0">,</span>
+                        <span class="s1">reason=</span><span class="s2">&quot;no fortran compiler on non-Linux platform&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">test_lapack(self):</span>
+        <span class="s1">f = FindDependenciesLdd()</span>
+        <span class="s1">deps = f.grep_dependencies(lapack_lite.__file__</span><span class="s0">,</span>
+                                   <span class="s1">[</span><span class="s4">b'libg2c'</span><span class="s0">, </span><span class="s4">b'libgfortran'</span><span class="s1">])</span>
+        <span class="s1">assert_(len(deps) &lt;= </span><span class="s3">1</span><span class="s0">,</span>
+                         <span class="s2">&quot;&quot;&quot;Both g77 and gfortran runtimes linked in lapack_lite ! This is likely to 
+cause random crashes and wrong results. See numpy INSTALL.txt for more 
+information.&quot;&quot;&quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

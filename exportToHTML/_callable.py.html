@@ -1,0 +1,358 @@
+<html>
+<head>
+<title>_callable.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6897bb;}
+.s4 { color: #6a8759;}
+.s5 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_callable.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+A module with various ``typing.Protocol`` subclasses that implement 
+the ``__call__`` magic method. 
+ 
+See the `Mypy documentation`_ on protocols for more details. 
+ 
+.. _`Mypy documentation`: https://mypy.readthedocs.io/en/stable/protocols.html#callback-protocols 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Union</span><span class="s2">,</span>
+    <span class="s1">TypeVar</span><span class="s2">,</span>
+    <span class="s1">overload</span><span class="s2">,</span>
+    <span class="s1">Any</span><span class="s2">,</span>
+    <span class="s1">Tuple</span><span class="s2">,</span>
+    <span class="s1">NoReturn</span><span class="s2">,</span>
+    <span class="s1">TYPE_CHECKING</span><span class="s2">,</span>
+<span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">numpy </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">generic</span><span class="s2">,</span>
+    <span class="s1">bool_</span><span class="s2">,</span>
+    <span class="s1">timedelta64</span><span class="s2">,</span>
+    <span class="s1">number</span><span class="s2">,</span>
+    <span class="s1">integer</span><span class="s2">,</span>
+    <span class="s1">unsignedinteger</span><span class="s2">,</span>
+    <span class="s1">signedinteger</span><span class="s2">,</span>
+    <span class="s1">int8</span><span class="s2">,</span>
+    <span class="s1">floating</span><span class="s2">,</span>
+    <span class="s1">float64</span><span class="s2">,</span>
+    <span class="s1">complexfloating</span><span class="s2">,</span>
+    <span class="s1">complex128</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">._scalars </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">_BoolLike</span><span class="s2">,</span>
+    <span class="s1">_IntLike</span><span class="s2">,</span>
+    <span class="s1">_FloatLike</span><span class="s2">,</span>
+    <span class="s1">_ComplexLike</span><span class="s2">,</span>
+    <span class="s1">_NumberLike</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">. </span><span class="s2">import </span><span class="s1">NBitBase</span>
+
+<span class="s2">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s3">3</span><span class="s2">, </span><span class="s3">8</span><span class="s1">):</span>
+    <span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Protocol</span>
+    <span class="s1">HAVE_PROTOCOL = </span><span class="s2">True</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">from </span><span class="s1">typing_extensions </span><span class="s2">import </span><span class="s1">Protocol</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s1">HAVE_PROTOCOL = </span><span class="s2">False</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">HAVE_PROTOCOL = </span><span class="s2">True</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING </span><span class="s2">or </span><span class="s1">HAVE_PROTOCOL:</span>
+    <span class="s1">_T = TypeVar(</span><span class="s4">&quot;_T&quot;</span><span class="s1">)</span>
+    <span class="s1">_2Tuple = Tuple[_T</span><span class="s2">, </span><span class="s1">_T]</span>
+
+    <span class="s1">_NBit_co = TypeVar(</span><span class="s4">&quot;_NBit_co&quot;</span><span class="s2">, </span><span class="s1">covariant=</span><span class="s2">True, </span><span class="s1">bound=NBitBase)</span>
+    <span class="s1">_NBit = TypeVar(</span><span class="s4">&quot;_NBit&quot;</span><span class="s2">, </span><span class="s1">bound=NBitBase)</span>
+
+    <span class="s1">_IntType = TypeVar(</span><span class="s4">&quot;_IntType&quot;</span><span class="s2">, </span><span class="s1">bound=integer)</span>
+    <span class="s1">_FloatType = TypeVar(</span><span class="s4">&quot;_FloatType&quot;</span><span class="s2">, </span><span class="s1">bound=floating)</span>
+    <span class="s1">_NumberType = TypeVar(</span><span class="s4">&quot;_NumberType&quot;</span><span class="s2">, </span><span class="s1">bound=number)</span>
+    <span class="s1">_NumberType_co = TypeVar(</span><span class="s4">&quot;_NumberType_co&quot;</span><span class="s2">, </span><span class="s1">covariant=</span><span class="s2">True, </span><span class="s1">bound=number)</span>
+    <span class="s1">_GenericType_co = TypeVar(</span><span class="s4">&quot;_GenericType_co&quot;</span><span class="s2">, </span><span class="s1">covariant=</span><span class="s2">True, </span><span class="s1">bound=generic)</span>
+
+    <span class="s2">class </span><span class="s1">_BoolOp(Protocol[_GenericType_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _BoolLike) -&gt; _GenericType_co: ...</span>
+        <span class="s1">@overload  </span><span class="s5"># platform dependent</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _NumberType) -&gt; _NumberType: ...</span>
+
+    <span class="s2">class </span><span class="s1">_BoolBitOp(Protocol[_GenericType_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _BoolLike) -&gt; _GenericType_co: ...</span>
+        <span class="s1">@overload  </span><span class="s5"># platform dependent</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _IntType) -&gt; _IntType: ...</span>
+
+    <span class="s2">class </span><span class="s1">_BoolSub(Protocol):</span>
+        <span class="s5"># Note that `__other: bool_` is absent here</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; NoReturn: ...</span>
+        <span class="s1">@overload  </span><span class="s5"># platform dependent</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _NumberType) -&gt; _NumberType: ...</span>
+
+    <span class="s2">class </span><span class="s1">_BoolTrueDiv(Protocol):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: Union[float</span><span class="s2">, </span><span class="s1">_IntLike</span><span class="s2">, </span><span class="s1">_BoolLike]) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _NumberType) -&gt; _NumberType: ...</span>
+
+    <span class="s2">class </span><span class="s1">_BoolMod(Protocol):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _BoolLike) -&gt; int8: ...</span>
+        <span class="s1">@overload  </span><span class="s5"># platform dependent</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _IntType) -&gt; _IntType: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _FloatType) -&gt; _FloatType: ...</span>
+
+    <span class="s2">class </span><span class="s1">_BoolDivMod(Protocol):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _BoolLike) -&gt; _2Tuple[int8]: ...</span>
+        <span class="s1">@overload  </span><span class="s5"># platform dependent</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; _2Tuple[signedinteger[Any]]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; _2Tuple[float64]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _IntType) -&gt; _2Tuple[_IntType]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _FloatType) -&gt; _2Tuple[_FloatType]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_TD64Div(Protocol[_NumberType_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: timedelta64) -&gt; _NumberType_co: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _FloatLike) -&gt; timedelta64: ...</span>
+
+    <span class="s2">class </span><span class="s1">_IntTrueDiv(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; floating[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; floating[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: integer[_NBit]) -&gt; floating[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_UnsignedIntOp(Protocol[_NBit_co]):</span>
+        <span class="s5"># NOTE: `uint64 + signedinteger -&gt; float64`</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; unsignedinteger[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: Union[int</span><span class="s2">, </span><span class="s1">signedinteger[Any]]</span>
+        <span class="s1">) -&gt; Any: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: unsignedinteger[_NBit]</span>
+        <span class="s1">) -&gt; unsignedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_UnsignedIntBitOp(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; unsignedinteger[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: signedinteger[Any]) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: unsignedinteger[_NBit]</span>
+        <span class="s1">) -&gt; unsignedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_UnsignedIntMod(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; unsignedinteger[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: Union[int</span><span class="s2">, </span><span class="s1">signedinteger[Any]]</span>
+        <span class="s1">) -&gt; Any: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: unsignedinteger[_NBit]</span>
+        <span class="s1">) -&gt; unsignedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_UnsignedIntDivMod(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; _2Tuple[signedinteger[_NBit_co]]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: Union[int</span><span class="s2">, </span><span class="s1">signedinteger[Any]]</span>
+        <span class="s1">) -&gt; _2Tuple[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; _2Tuple[float64]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: unsignedinteger[_NBit]</span>
+        <span class="s1">) -&gt; _2Tuple[unsignedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_SignedIntOp(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; signedinteger[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: signedinteger[_NBit]</span>
+        <span class="s1">) -&gt; signedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_SignedIntBitOp(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; signedinteger[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: signedinteger[_NBit]</span>
+        <span class="s1">) -&gt; signedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_SignedIntMod(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; signedinteger[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; signedinteger[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: signedinteger[_NBit]</span>
+        <span class="s1">) -&gt; signedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_SignedIntDivMod(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; _2Tuple[signedinteger[_NBit_co]]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; _2Tuple[signedinteger[Any]]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; _2Tuple[float64]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: signedinteger[_NBit]</span>
+        <span class="s1">) -&gt; _2Tuple[signedinteger[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_FloatOp(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; floating[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; floating[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: complex) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: Union[integer[_NBit]</span><span class="s2">, </span><span class="s1">floating[_NBit]]</span>
+        <span class="s1">) -&gt; floating[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_FloatMod(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; floating[_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; floating[Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; float64: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: Union[integer[_NBit]</span><span class="s2">, </span><span class="s1">floating[_NBit]]</span>
+        <span class="s1">) -&gt; floating[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_FloatDivMod(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; _2Tuple[floating[_NBit_co]]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; _2Tuple[floating[Any]]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: float) -&gt; _2Tuple[float64]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">, </span><span class="s1">__other: Union[integer[_NBit]</span><span class="s2">, </span><span class="s1">floating[_NBit]]</span>
+        <span class="s1">) -&gt; _2Tuple[floating[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_ComplexOp(Protocol[_NBit_co]):</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: bool) -&gt; complexfloating[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit_co]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: int) -&gt; complexfloating[Any</span><span class="s2">, </span><span class="s1">Any]: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: Union[float</span><span class="s2">, </span><span class="s1">complex]) -&gt; complex128: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s2">def </span><span class="s1">__call__(</span>
+            <span class="s1">self</span><span class="s2">,</span>
+            <span class="s1">__other: Union[</span>
+                <span class="s1">integer[_NBit]</span><span class="s2">,</span>
+                <span class="s1">floating[_NBit]</span><span class="s2">,</span>
+                <span class="s1">complexfloating[_NBit</span><span class="s2">, </span><span class="s1">_NBit]</span><span class="s2">,</span>
+            <span class="s1">]</span>
+        <span class="s1">) -&gt; complexfloating[Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]</span><span class="s2">, </span><span class="s1">Union[_NBit_co</span><span class="s2">, </span><span class="s1">_NBit]]: ...</span>
+
+    <span class="s2">class </span><span class="s1">_NumberOp(Protocol):</span>
+        <span class="s2">def </span><span class="s1">__call__(self</span><span class="s2">, </span><span class="s1">__other: _NumberLike) -&gt; number: ...</span>
+
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">_BoolOp = Any</span>
+    <span class="s1">_BoolBitOp = Any</span>
+    <span class="s1">_BoolSub = Any</span>
+    <span class="s1">_BoolTrueDiv = Any</span>
+    <span class="s1">_BoolMod = Any</span>
+    <span class="s1">_BoolDivMod = Any</span>
+    <span class="s1">_TD64Div = Any</span>
+    <span class="s1">_IntTrueDiv = Any</span>
+    <span class="s1">_UnsignedIntOp = Any</span>
+    <span class="s1">_UnsignedIntBitOp = Any</span>
+    <span class="s1">_UnsignedIntMod = Any</span>
+    <span class="s1">_UnsignedIntDivMod = Any</span>
+    <span class="s1">_SignedIntOp = Any</span>
+    <span class="s1">_SignedIntBitOp = Any</span>
+    <span class="s1">_SignedIntMod = Any</span>
+    <span class="s1">_SignedIntDivMod = Any</span>
+    <span class="s1">_FloatOp = Any</span>
+    <span class="s1">_FloatMod = Any</span>
+    <span class="s1">_FloatDivMod = Any</span>
+    <span class="s1">_ComplexOp = Any</span>
+    <span class="s1">_NumberOp = Any</span>
+</pre>
+</body>
+</html>

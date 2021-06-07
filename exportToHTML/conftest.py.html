@@ -1,0 +1,1497 @@
+<html>
+<head>
+<title>conftest.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #808080;}
+.s4 { color: #6a8759;}
+.s5 { color: #6897bb;}
+.s6 { color: #a5c261;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+conftest.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+This file is very long and growing, but it was decided to not split it yet, as 
+it's still manageable (2020-03-17, ~1.1k LoC). See gh-31989 
+ 
+Instead of splitting it was decided to define sections here: 
+- Configuration / Settings 
+- Autouse fixtures 
+- Common arguments 
+- Missing values &amp; co. 
+- Classes 
+- Indices 
+- Series' 
+- DataFrames 
+- Operators &amp; Operations 
+- Data sets/files 
+- Time zones 
+- Dtypes 
+- Misc 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">abc</span>
+<span class="s2">from </span><span class="s1">datetime </span><span class="s2">import </span><span class="s1">date</span><span class="s2">, </span><span class="s1">time</span><span class="s2">, </span><span class="s1">timedelta</span><span class="s2">, </span><span class="s1">timezone</span>
+<span class="s2">from </span><span class="s1">decimal </span><span class="s2">import </span><span class="s1">Decimal</span>
+<span class="s2">import </span><span class="s1">operator</span>
+<span class="s2">import </span><span class="s1">os</span>
+
+<span class="s2">from </span><span class="s1">dateutil.tz </span><span class="s2">import </span><span class="s1">tzlocal</span><span class="s2">, </span><span class="s1">tzutc</span>
+<span class="s2">import </span><span class="s1">hypothesis</span>
+<span class="s2">from </span><span class="s1">hypothesis </span><span class="s2">import </span><span class="s1">strategies </span><span class="s2">as </span><span class="s1">st</span>
+<span class="s2">import </span><span class="s1">numpy </span><span class="s2">as </span><span class="s1">np</span>
+<span class="s2">import </span><span class="s1">pytest</span>
+<span class="s2">from </span><span class="s1">pytz </span><span class="s2">import </span><span class="s1">FixedOffset</span><span class="s2">, </span><span class="s1">utc</span>
+
+<span class="s2">import </span><span class="s1">pandas.util._test_decorators </span><span class="s2">as </span><span class="s1">td</span>
+
+<span class="s2">from </span><span class="s1">pandas.core.dtypes.dtypes </span><span class="s2">import </span><span class="s1">DatetimeTZDtype</span><span class="s2">, </span><span class="s1">IntervalDtype</span>
+
+<span class="s2">import </span><span class="s1">pandas </span><span class="s2">as </span><span class="s1">pd</span>
+<span class="s2">from </span><span class="s1">pandas </span><span class="s2">import </span><span class="s1">DataFrame</span><span class="s2">, </span><span class="s1">Interval</span><span class="s2">, </span><span class="s1">Period</span><span class="s2">, </span><span class="s1">Series</span><span class="s2">, </span><span class="s1">Timedelta</span><span class="s2">, </span><span class="s1">Timestamp</span>
+<span class="s2">import </span><span class="s1">pandas._testing </span><span class="s2">as </span><span class="s1">tm</span>
+<span class="s2">from </span><span class="s1">pandas.core </span><span class="s2">import </span><span class="s1">ops</span>
+<span class="s2">from </span><span class="s1">pandas.core.indexes.api </span><span class="s2">import </span><span class="s1">Index</span><span class="s2">, </span><span class="s1">MultiIndex</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Configuration / Settings</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># pytest</span>
+<span class="s2">def </span><span class="s1">pytest_configure(config):</span>
+    <span class="s3"># Register marks to avoid warnings in pandas.test()</span>
+    <span class="s3"># sync with setup.cfg</span>
+    <span class="s1">config.addinivalue_line(</span><span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;single: mark a test as single cpu only&quot;</span><span class="s1">)</span>
+    <span class="s1">config.addinivalue_line(</span><span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;slow: mark a test as slow&quot;</span><span class="s1">)</span>
+    <span class="s1">config.addinivalue_line(</span><span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;network: mark a test as network&quot;</span><span class="s1">)</span>
+    <span class="s1">config.addinivalue_line(</span>
+        <span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;db: tests requiring a database (mysql or postgres)&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">config.addinivalue_line(</span><span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;high_memory: mark a test as a high-memory only&quot;</span><span class="s1">)</span>
+    <span class="s1">config.addinivalue_line(</span><span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;clipboard: mark a pd.read_clipboard test&quot;</span><span class="s1">)</span>
+    <span class="s1">config.addinivalue_line(</span>
+        <span class="s4">&quot;markers&quot;</span><span class="s2">, </span><span class="s4">&quot;arm_slow: mark a test as slow for arm64 architecture&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_addoption(parser):</span>
+    <span class="s1">parser.addoption(</span><span class="s4">&quot;--skip-slow&quot;</span><span class="s2">, </span><span class="s1">action=</span><span class="s4">&quot;store_true&quot;</span><span class="s2">, </span><span class="s1">help=</span><span class="s4">&quot;skip slow tests&quot;</span><span class="s1">)</span>
+    <span class="s1">parser.addoption(</span><span class="s4">&quot;--skip-network&quot;</span><span class="s2">, </span><span class="s1">action=</span><span class="s4">&quot;store_true&quot;</span><span class="s2">, </span><span class="s1">help=</span><span class="s4">&quot;skip network tests&quot;</span><span class="s1">)</span>
+    <span class="s1">parser.addoption(</span><span class="s4">&quot;--skip-db&quot;</span><span class="s2">, </span><span class="s1">action=</span><span class="s4">&quot;store_true&quot;</span><span class="s2">, </span><span class="s1">help=</span><span class="s4">&quot;skip db tests&quot;</span><span class="s1">)</span>
+    <span class="s1">parser.addoption(</span>
+        <span class="s4">&quot;--run-high-memory&quot;</span><span class="s2">, </span><span class="s1">action=</span><span class="s4">&quot;store_true&quot;</span><span class="s2">, </span><span class="s1">help=</span><span class="s4">&quot;run high memory tests&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">parser.addoption(</span><span class="s4">&quot;--only-slow&quot;</span><span class="s2">, </span><span class="s1">action=</span><span class="s4">&quot;store_true&quot;</span><span class="s2">, </span><span class="s1">help=</span><span class="s4">&quot;run only slow tests&quot;</span><span class="s1">)</span>
+    <span class="s1">parser.addoption(</span>
+        <span class="s4">&quot;--strict-data-files&quot;</span><span class="s2">,</span>
+        <span class="s1">action=</span><span class="s4">&quot;store_true&quot;</span><span class="s2">,</span>
+        <span class="s1">help=</span><span class="s4">&quot;Fail if a test is skipped for missing data file.&quot;</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_runtest_setup(item):</span>
+    <span class="s2">if </span><span class="s4">&quot;slow&quot; </span><span class="s2">in </span><span class="s1">item.keywords </span><span class="s2">and </span><span class="s1">item.config.getoption(</span><span class="s4">&quot;--skip-slow&quot;</span><span class="s1">):</span>
+        <span class="s1">pytest.skip(</span><span class="s4">&quot;skipping due to --skip-slow&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s4">&quot;slow&quot; </span><span class="s2">not in </span><span class="s1">item.keywords </span><span class="s2">and </span><span class="s1">item.config.getoption(</span><span class="s4">&quot;--only-slow&quot;</span><span class="s1">):</span>
+        <span class="s1">pytest.skip(</span><span class="s4">&quot;skipping due to --only-slow&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s4">&quot;network&quot; </span><span class="s2">in </span><span class="s1">item.keywords </span><span class="s2">and </span><span class="s1">item.config.getoption(</span><span class="s4">&quot;--skip-network&quot;</span><span class="s1">):</span>
+        <span class="s1">pytest.skip(</span><span class="s4">&quot;skipping due to --skip-network&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s4">&quot;db&quot; </span><span class="s2">in </span><span class="s1">item.keywords </span><span class="s2">and </span><span class="s1">item.config.getoption(</span><span class="s4">&quot;--skip-db&quot;</span><span class="s1">):</span>
+        <span class="s1">pytest.skip(</span><span class="s4">&quot;skipping due to --skip-db&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s4">&quot;high_memory&quot; </span><span class="s2">in </span><span class="s1">item.keywords </span><span class="s2">and not </span><span class="s1">item.config.getoption(</span>
+        <span class="s4">&quot;--run-high-memory&quot;</span>
+    <span class="s1">):</span>
+        <span class="s1">pytest.skip(</span><span class="s4">&quot;skipping high memory test since --run-high-memory was not set&quot;</span><span class="s1">)</span>
+
+
+<span class="s3"># Hypothesis</span>
+<span class="s1">hypothesis.settings.register_profile(</span>
+    <span class="s4">&quot;ci&quot;</span><span class="s2">,</span>
+    <span class="s3"># Hypothesis timing checks are tuned for scalars by default, so we bump</span>
+    <span class="s3"># them from 200ms to 500ms per test case as the global default.  If this</span>
+    <span class="s3"># is too short for a specific test, (a) try to make it faster, and (b)</span>
+    <span class="s3"># if it really is slow add `@settings(deadline=...)` with a working value,</span>
+    <span class="s3"># or `deadline=None` to entirely disable timeouts for that test.</span>
+    <span class="s1">deadline=</span><span class="s5">500</span><span class="s2">,</span>
+    <span class="s1">suppress_health_check=(hypothesis.HealthCheck.too_slow</span><span class="s2">,</span><span class="s1">)</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s1">hypothesis.settings.load_profile(</span><span class="s4">&quot;ci&quot;</span><span class="s1">)</span>
+
+<span class="s3"># Registering these strategies makes them globally available via st.from_type,</span>
+<span class="s3"># which is use for offsets in tests/tseries/offsets/test_offsets_properties.py</span>
+<span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s4">&quot;MonthBegin MonthEnd BMonthBegin BMonthEnd&quot;</span><span class="s1">.split():</span>
+    <span class="s1">cls = getattr(pd.tseries.offsets</span><span class="s2">, </span><span class="s1">name)</span>
+    <span class="s1">st.register_type_strategy(</span>
+        <span class="s1">cls</span><span class="s2">, </span><span class="s1">st.builds(cls</span><span class="s2">, </span><span class="s1">n=st.integers(-</span><span class="s5">99</span><span class="s2">, </span><span class="s5">99</span><span class="s1">)</span><span class="s2">, </span><span class="s1">normalize=st.booleans())</span>
+    <span class="s1">)</span>
+
+<span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s4">&quot;YearBegin YearEnd BYearBegin BYearEnd&quot;</span><span class="s1">.split():</span>
+    <span class="s1">cls = getattr(pd.tseries.offsets</span><span class="s2">, </span><span class="s1">name)</span>
+    <span class="s1">st.register_type_strategy(</span>
+        <span class="s1">cls</span><span class="s2">,</span>
+        <span class="s1">st.builds(</span>
+            <span class="s1">cls</span><span class="s2">,</span>
+            <span class="s1">n=st.integers(-</span><span class="s5">5</span><span class="s2">, </span><span class="s5">5</span><span class="s1">)</span><span class="s2">,</span>
+            <span class="s1">normalize=st.booleans()</span><span class="s2">,</span>
+            <span class="s1">month=st.integers(min_value=</span><span class="s5">1</span><span class="s2">, </span><span class="s1">max_value=</span><span class="s5">12</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+<span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s4">&quot;QuarterBegin QuarterEnd BQuarterBegin BQuarterEnd&quot;</span><span class="s1">.split():</span>
+    <span class="s1">cls = getattr(pd.tseries.offsets</span><span class="s2">, </span><span class="s1">name)</span>
+    <span class="s1">st.register_type_strategy(</span>
+        <span class="s1">cls</span><span class="s2">,</span>
+        <span class="s1">st.builds(</span>
+            <span class="s1">cls</span><span class="s2">,</span>
+            <span class="s1">n=st.integers(-</span><span class="s5">24</span><span class="s2">, </span><span class="s5">24</span><span class="s1">)</span><span class="s2">,</span>
+            <span class="s1">normalize=st.booleans()</span><span class="s2">,</span>
+            <span class="s1">startingMonth=st.integers(min_value=</span><span class="s5">1</span><span class="s2">, </span><span class="s1">max_value=</span><span class="s5">12</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Autouse fixtures</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture(autouse=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">configure_tests():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Configure settings for all tests and test modules. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">pd.set_option(</span><span class="s4">&quot;chained_assignment&quot;</span><span class="s2">, </span><span class="s4">&quot;raise&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">@pytest.fixture(autouse=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">add_imports(doctest_namespace):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Make `np` and `pd` names available for doctests. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">doctest_namespace[</span><span class="s4">&quot;np&quot;</span><span class="s1">] = np</span>
+    <span class="s1">doctest_namespace[</span><span class="s4">&quot;pd&quot;</span><span class="s1">] = pd</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Common arguments</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture(params=[</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s4">&quot;index&quot;</span><span class="s2">, </span><span class="s4">&quot;columns&quot;</span><span class="s1">]</span><span class="s2">, </span><span class="s1">ids=</span><span class="s2">lambda </span><span class="s1">x: </span><span class="s4">f&quot;axis </span><span class="s2">{</span><span class="s1">repr(x)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">axis(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for returning the axis numbers of a DataFrame. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">axis_frame = axis</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s2">True, False, None</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">observed(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Pass in the observed keyword to groupby for [True, False] 
+    This indicates whether categoricals should return values for 
+    values which are not in the grouper [False / None], or only values which 
+    appear in the grouper [True]. [None] is supported for future compatibility 
+    if we decide to change the default (and would need to warn if this 
+    parameter is not passed). 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s2">True, False, None</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">ordered(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Boolean 'ordered' parameter for Categorical. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;first&quot;</span><span class="s2">, </span><span class="s4">&quot;last&quot;</span><span class="s2">, False</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">keep(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Valid values for the 'keep' parameter used in 
+    .duplicated or .drop_duplicates 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;left&quot;</span><span class="s2">, </span><span class="s4">&quot;right&quot;</span><span class="s2">, </span><span class="s4">&quot;both&quot;</span><span class="s2">, </span><span class="s4">&quot;neither&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">closed(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying all interval closed parameters. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;left&quot;</span><span class="s2">, </span><span class="s4">&quot;right&quot;</span><span class="s2">, </span><span class="s4">&quot;both&quot;</span><span class="s2">, </span><span class="s4">&quot;neither&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">other_closed(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Secondary closed fixture to allow parametrizing over all pairs of closed. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s2">None, </span><span class="s4">&quot;gzip&quot;</span><span class="s2">, </span><span class="s4">&quot;bz2&quot;</span><span class="s2">, </span><span class="s4">&quot;zip&quot;</span><span class="s2">, </span><span class="s4">&quot;xz&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">compression(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying common compression types in compression tests. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;gzip&quot;</span><span class="s2">, </span><span class="s4">&quot;bz2&quot;</span><span class="s2">, </span><span class="s4">&quot;zip&quot;</span><span class="s2">, </span><span class="s4">&quot;xz&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">compression_only(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying common compression types in compression tests excluding 
+    uncompressed case. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s2">True, False</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">writable(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture that an array is writable. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;inner&quot;</span><span class="s2">, </span><span class="s4">&quot;outer&quot;</span><span class="s2">, </span><span class="s4">&quot;left&quot;</span><span class="s2">, </span><span class="s4">&quot;right&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">join_type(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying all types of join operations. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;nlargest&quot;</span><span class="s2">, </span><span class="s4">&quot;nsmallest&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">nselect_method(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying all nselect methods. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Missing values &amp; co.</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture(params=tm.NULL_OBJECTS</span><span class="s2">, </span><span class="s1">ids=str)</span>
+<span class="s2">def </span><span class="s1">nulls_fixture(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for each null type in pandas. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">nulls_fixture2 = nulls_fixture  </span><span class="s3"># Generate cartesian product of nulls_fixture</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s2">None, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">pd.NaT])</span>
+<span class="s2">def </span><span class="s1">unique_nulls_fixture(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for each null type in pandas, each null type exactly once. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># Generate cartesian product of unique_nulls_fixture:</span>
+<span class="s1">unique_nulls_fixture2 = unique_nulls_fixture</span>
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Classes</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+
+
+<span class="s1">@pytest.fixture(params=[pd.DataFrame</span><span class="s2">, </span><span class="s1">pd.Series])</span>
+<span class="s2">def </span><span class="s1">frame_or_series(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture to parametrize over DataFrame and Series. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[pd.Index</span><span class="s2">, </span><span class="s1">pd.Series]</span><span class="s2">, </span><span class="s1">ids=[</span><span class="s4">&quot;index&quot;</span><span class="s2">, </span><span class="s4">&quot;series&quot;</span><span class="s1">]  </span><span class="s3"># type: ignore[list-item]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">index_or_series(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture to parametrize over Index and Series, made necessary by a mypy 
+    bug, giving an error: 
+ 
+    List item 0 has incompatible type &quot;Type[Series]&quot;; expected &quot;Type[PandasObject]&quot; 
+ 
+    See GH#29725 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># Generate cartesian product of index_or_series fixture:</span>
+<span class="s1">index_or_series2 = index_or_series</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[pd.Index</span><span class="s2">, </span><span class="s1">pd.Series</span><span class="s2">, </span><span class="s1">pd.array]</span><span class="s2">, </span><span class="s1">ids=[</span><span class="s4">&quot;index&quot;</span><span class="s2">, </span><span class="s4">&quot;series&quot;</span><span class="s2">, </span><span class="s4">&quot;array&quot;</span><span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">index_or_series_or_array(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture to parametrize over Index, Series, and ExtensionArray 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">dict_subclass():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for a dictionary subclass. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">class </span><span class="s1">TestSubDict(dict):</span>
+        <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">*args</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+            <span class="s1">dict.__init__(self</span><span class="s2">, </span><span class="s1">*args</span><span class="s2">, </span><span class="s1">**kwargs)</span>
+
+    <span class="s2">return </span><span class="s1">TestSubDict</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">non_dict_mapping_subclass():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for a non-mapping dictionary subclass. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">class </span><span class="s1">TestNonDictMapping(abc.Mapping):</span>
+        <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">underlying_dict):</span>
+            <span class="s1">self._data = underlying_dict</span>
+
+        <span class="s2">def </span><span class="s1">__getitem__(self</span><span class="s2">, </span><span class="s1">key):</span>
+            <span class="s2">return </span><span class="s1">self._data.__getitem__(key)</span>
+
+        <span class="s2">def </span><span class="s1">__iter__(self):</span>
+            <span class="s2">return </span><span class="s1">self._data.__iter__()</span>
+
+        <span class="s2">def </span><span class="s1">__len__(self):</span>
+            <span class="s2">return </span><span class="s1">self._data.__len__()</span>
+
+    <span class="s2">return </span><span class="s1">TestNonDictMapping</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Indices</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">multiindex_year_month_day_dataframe_random_data():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    DataFrame with 3 level MultiIndex (year, month, day) covering 
+    first 100 business days from 2000-01-01 with random data 
+    &quot;&quot;&quot;</span>
+    <span class="s1">tdf = tm.makeTimeDataFrame(</span><span class="s5">100</span><span class="s1">)</span>
+    <span class="s1">ymd = tdf.groupby([</span><span class="s2">lambda </span><span class="s1">x: x.year</span><span class="s2">, lambda </span><span class="s1">x: x.month</span><span class="s2">, lambda </span><span class="s1">x: x.day]).sum()</span>
+    <span class="s3"># use Int64Index, to make sure things work</span>
+    <span class="s1">ymd.index = ymd.index.set_levels([lev.astype(</span><span class="s4">&quot;i8&quot;</span><span class="s1">) </span><span class="s2">for </span><span class="s1">lev </span><span class="s2">in </span><span class="s1">ymd.index.levels])</span>
+    <span class="s1">ymd.index.set_names([</span><span class="s4">&quot;year&quot;</span><span class="s2">, </span><span class="s4">&quot;month&quot;</span><span class="s2">, </span><span class="s4">&quot;day&quot;</span><span class="s1">]</span><span class="s2">, </span><span class="s1">inplace=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">ymd</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">multiindex_dataframe_random_data():</span>
+    <span class="s0">&quot;&quot;&quot;DataFrame with 2 level MultiIndex with random data&quot;&quot;&quot;</span>
+    <span class="s1">index = MultiIndex(</span>
+        <span class="s1">levels=[[</span><span class="s4">&quot;foo&quot;</span><span class="s2">, </span><span class="s4">&quot;bar&quot;</span><span class="s2">, </span><span class="s4">&quot;baz&quot;</span><span class="s2">, </span><span class="s4">&quot;qux&quot;</span><span class="s1">]</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s2">, </span><span class="s4">&quot;three&quot;</span><span class="s1">]]</span><span class="s2">,</span>
+        <span class="s1">codes=[[</span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">3</span><span class="s2">, </span><span class="s5">3</span><span class="s2">, </span><span class="s5">3</span><span class="s1">]</span><span class="s2">, </span><span class="s1">[</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s1">]]</span><span class="s2">,</span>
+        <span class="s1">names=[</span><span class="s4">&quot;first&quot;</span><span class="s2">, </span><span class="s4">&quot;second&quot;</span><span class="s1">]</span><span class="s2">,</span>
+    <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">DataFrame(</span>
+        <span class="s1">np.random.randn(</span><span class="s5">10</span><span class="s2">, </span><span class="s5">3</span><span class="s1">)</span><span class="s2">, </span><span class="s1">index=index</span><span class="s2">, </span><span class="s1">columns=Index([</span><span class="s4">&quot;A&quot;</span><span class="s2">, </span><span class="s4">&quot;B&quot;</span><span class="s2">, </span><span class="s4">&quot;C&quot;</span><span class="s1">]</span><span class="s2">, </span><span class="s1">name=</span><span class="s4">&quot;exp&quot;</span><span class="s1">)</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_create_multiindex():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    MultiIndex used to test the general functionality of this object 
+    &quot;&quot;&quot;</span>
+
+    <span class="s3"># See Also: tests.multi.conftest.idx</span>
+    <span class="s1">major_axis = Index([</span><span class="s4">&quot;foo&quot;</span><span class="s2">, </span><span class="s4">&quot;bar&quot;</span><span class="s2">, </span><span class="s4">&quot;baz&quot;</span><span class="s2">, </span><span class="s4">&quot;qux&quot;</span><span class="s1">])</span>
+    <span class="s1">minor_axis = Index([</span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s1">])</span>
+
+    <span class="s1">major_codes = np.array([</span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">3</span><span class="s2">, </span><span class="s5">3</span><span class="s1">])</span>
+    <span class="s1">minor_codes = np.array([</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s1">])</span>
+    <span class="s1">index_names = [</span><span class="s4">&quot;first&quot;</span><span class="s2">, </span><span class="s4">&quot;second&quot;</span><span class="s1">]</span>
+    <span class="s2">return </span><span class="s1">MultiIndex(</span>
+        <span class="s1">levels=[major_axis</span><span class="s2">, </span><span class="s1">minor_axis]</span><span class="s2">,</span>
+        <span class="s1">codes=[major_codes</span><span class="s2">, </span><span class="s1">minor_codes]</span><span class="s2">,</span>
+        <span class="s1">names=index_names</span><span class="s2">,</span>
+        <span class="s1">verify_integrity=</span><span class="s2">False,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_create_mi_with_dt64tz_level():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    MultiIndex with a level that is a tzaware DatetimeIndex. 
+    &quot;&quot;&quot;</span>
+    <span class="s3"># GH#8367 round trip with pickle</span>
+    <span class="s2">return </span><span class="s1">MultiIndex.from_product(</span>
+        <span class="s1">[[</span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s1">]</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;a&quot;</span><span class="s2">, </span><span class="s4">&quot;b&quot;</span><span class="s1">]</span><span class="s2">, </span><span class="s1">pd.date_range(</span><span class="s4">&quot;20130101&quot;</span><span class="s2">, </span><span class="s1">periods=</span><span class="s5">3</span><span class="s2">, </span><span class="s1">tz=</span><span class="s4">&quot;US/Eastern&quot;</span><span class="s1">)]</span><span class="s2">,</span>
+        <span class="s1">names=[</span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s2">, </span><span class="s4">&quot;three&quot;</span><span class="s1">]</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">indices_dict = {</span>
+    <span class="s4">&quot;unicode&quot;</span><span class="s1">: tm.makeUnicodeIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;string&quot;</span><span class="s1">: tm.makeStringIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;datetime&quot;</span><span class="s1">: tm.makeDateIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;datetime-tz&quot;</span><span class="s1">: tm.makeDateIndex(</span><span class="s5">100</span><span class="s2">, </span><span class="s1">tz=</span><span class="s4">&quot;US/Pacific&quot;</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;period&quot;</span><span class="s1">: tm.makePeriodIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;timedelta&quot;</span><span class="s1">: tm.makeTimedeltaIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;int&quot;</span><span class="s1">: tm.makeIntIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;uint&quot;</span><span class="s1">: tm.makeUIntIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;range&quot;</span><span class="s1">: tm.makeRangeIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;float&quot;</span><span class="s1">: tm.makeFloatIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;bool&quot;</span><span class="s1">: tm.makeBoolIndex(</span><span class="s5">10</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;categorical&quot;</span><span class="s1">: tm.makeCategoricalIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;interval&quot;</span><span class="s1">: tm.makeIntervalIndex(</span><span class="s5">100</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s4">&quot;empty&quot;</span><span class="s1">: Index([])</span><span class="s2">,</span>
+    <span class="s4">&quot;tuples&quot;</span><span class="s1">: MultiIndex.from_tuples(zip([</span><span class="s4">&quot;foo&quot;</span><span class="s2">, </span><span class="s4">&quot;bar&quot;</span><span class="s2">, </span><span class="s4">&quot;baz&quot;</span><span class="s1">]</span><span class="s2">, </span><span class="s1">[</span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">3</span><span class="s1">]))</span><span class="s2">,</span>
+    <span class="s4">&quot;mi-with-dt64tz-level&quot;</span><span class="s1">: _create_mi_with_dt64tz_level()</span><span class="s2">,</span>
+    <span class="s4">&quot;multi&quot;</span><span class="s1">: _create_multiindex()</span><span class="s2">,</span>
+    <span class="s4">&quot;repeats&quot;</span><span class="s1">: Index([</span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">2</span><span class="s1">])</span><span class="s2">,</span>
+<span class="s1">}</span>
+
+
+<span class="s1">@pytest.fixture(params=indices_dict.keys())</span>
+<span class="s2">def </span><span class="s1">index(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for many &quot;simple&quot; kinds of indices. 
+ 
+    These indices are unlikely to cover corner cases, e.g. 
+        - no names 
+        - no NaTs/NaNs 
+        - no values near implementation bounds 
+        - ... 
+    &quot;&quot;&quot;</span>
+    <span class="s3"># copy to avoid mutation, e.g. setting .name</span>
+    <span class="s2">return </span><span class="s1">indices_dict[request.param].copy()</span>
+
+
+<span class="s3"># Needed to generate cartesian product of indices</span>
+<span class="s1">index_fixture2 = index</span>
+
+
+<span class="s1">@pytest.fixture(params=indices_dict.keys())</span>
+<span class="s2">def </span><span class="s1">index_with_missing(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for indices with missing values 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">request.param </span><span class="s2">in </span><span class="s1">[</span><span class="s4">&quot;int&quot;</span><span class="s2">, </span><span class="s4">&quot;uint&quot;</span><span class="s2">, </span><span class="s4">&quot;range&quot;</span><span class="s2">, </span><span class="s4">&quot;empty&quot;</span><span class="s2">, </span><span class="s4">&quot;repeats&quot;</span><span class="s1">]:</span>
+        <span class="s1">pytest.xfail(</span><span class="s4">&quot;missing values not supported&quot;</span><span class="s1">)</span>
+    <span class="s3"># GH 35538. Use deep copy to avoid illusive bug on np-dev</span>
+    <span class="s3"># Azure pipeline that writes into indices_dict despite copy</span>
+    <span class="s1">ind = indices_dict[request.param].copy(deep=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">vals = ind.values</span>
+    <span class="s2">if </span><span class="s1">request.param </span><span class="s2">in </span><span class="s1">[</span><span class="s4">&quot;tuples&quot;</span><span class="s2">, </span><span class="s4">&quot;mi-with-dt64tz-level&quot;</span><span class="s2">, </span><span class="s4">&quot;multi&quot;</span><span class="s1">]:</span>
+        <span class="s3"># For setting missing values in the top level of MultiIndex</span>
+        <span class="s1">vals = ind.tolist()</span>
+        <span class="s1">vals[</span><span class="s5">0</span><span class="s1">] = (</span><span class="s2">None,</span><span class="s1">) + vals[</span><span class="s5">0</span><span class="s1">][</span><span class="s5">1</span><span class="s1">:]</span>
+        <span class="s1">vals[-</span><span class="s5">1</span><span class="s1">] = (</span><span class="s2">None,</span><span class="s1">) + vals[-</span><span class="s5">1</span><span class="s1">][</span><span class="s5">1</span><span class="s1">:]</span>
+        <span class="s2">return </span><span class="s1">MultiIndex.from_tuples(vals)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">vals[</span><span class="s5">0</span><span class="s1">] = </span><span class="s2">None</span>
+        <span class="s1">vals[-</span><span class="s5">1</span><span class="s1">] = </span><span class="s2">None</span>
+        <span class="s2">return </span><span class="s1">type(ind)(vals)</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Series'</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">empty_series():</span>
+    <span class="s2">return </span><span class="s1">pd.Series([]</span><span class="s2">, </span><span class="s1">index=[]</span><span class="s2">, </span><span class="s1">dtype=np.float64)</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">string_series():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for Series of floats with Index of unique strings 
+    &quot;&quot;&quot;</span>
+    <span class="s1">s = tm.makeStringSeries()</span>
+    <span class="s1">s.name = </span><span class="s4">&quot;series&quot;</span>
+    <span class="s2">return </span><span class="s1">s</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">object_series():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for Series of dtype object with Index of unique strings 
+    &quot;&quot;&quot;</span>
+    <span class="s1">s = tm.makeObjectSeries()</span>
+    <span class="s1">s.name = </span><span class="s4">&quot;objects&quot;</span>
+    <span class="s2">return </span><span class="s1">s</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">datetime_series():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for Series of floats with DatetimeIndex 
+    &quot;&quot;&quot;</span>
+    <span class="s1">s = tm.makeTimeSeries()</span>
+    <span class="s1">s.name = </span><span class="s4">&quot;ts&quot;</span>
+    <span class="s2">return </span><span class="s1">s</span>
+
+
+<span class="s2">def </span><span class="s1">_create_series(index):</span>
+    <span class="s0">&quot;&quot;&quot; Helper for the _series dict &quot;&quot;&quot;</span>
+    <span class="s1">size = len(index)</span>
+    <span class="s1">data = np.random.randn(size)</span>
+    <span class="s2">return </span><span class="s1">pd.Series(data</span><span class="s2">, </span><span class="s1">index=index</span><span class="s2">, </span><span class="s1">name=</span><span class="s4">&quot;a&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">_series = {</span>
+    <span class="s4">f&quot;series-with-</span><span class="s2">{</span><span class="s1">index_id</span><span class="s2">}</span><span class="s4">-index&quot;</span><span class="s1">: _create_series(index)</span>
+    <span class="s2">for </span><span class="s1">index_id</span><span class="s2">, </span><span class="s1">index </span><span class="s2">in </span><span class="s1">indices_dict.items()</span>
+<span class="s1">}</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">series_with_simple_index(index):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for tests on series with changing types of indices. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">_create_series(index)</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">series_with_multilevel_index():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture with a Series with a 2-level MultiIndex. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">arrays = [</span>
+        <span class="s1">[</span><span class="s4">&quot;bar&quot;</span><span class="s2">, </span><span class="s4">&quot;bar&quot;</span><span class="s2">, </span><span class="s4">&quot;baz&quot;</span><span class="s2">, </span><span class="s4">&quot;baz&quot;</span><span class="s2">, </span><span class="s4">&quot;qux&quot;</span><span class="s2">, </span><span class="s4">&quot;qux&quot;</span><span class="s2">, </span><span class="s4">&quot;foo&quot;</span><span class="s2">, </span><span class="s4">&quot;foo&quot;</span><span class="s1">]</span><span class="s2">,</span>
+        <span class="s1">[</span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s2">, </span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s2">, </span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s2">, </span><span class="s4">&quot;one&quot;</span><span class="s2">, </span><span class="s4">&quot;two&quot;</span><span class="s1">]</span><span class="s2">,</span>
+    <span class="s1">]</span>
+    <span class="s1">tuples = zip(*arrays)</span>
+    <span class="s1">index = MultiIndex.from_tuples(tuples)</span>
+    <span class="s1">data = np.random.randn(</span><span class="s5">8</span><span class="s1">)</span>
+    <span class="s1">ser = Series(data</span><span class="s2">, </span><span class="s1">index=index)</span>
+    <span class="s1">ser[</span><span class="s5">3</span><span class="s1">] = np.NaN</span>
+    <span class="s2">return </span><span class="s1">ser</span>
+
+
+<span class="s1">_narrow_dtypes = [</span>
+    <span class="s1">np.float16</span><span class="s2">,</span>
+    <span class="s1">np.float32</span><span class="s2">,</span>
+    <span class="s1">np.int8</span><span class="s2">,</span>
+    <span class="s1">np.int16</span><span class="s2">,</span>
+    <span class="s1">np.int32</span><span class="s2">,</span>
+    <span class="s1">np.uint8</span><span class="s2">,</span>
+    <span class="s1">np.uint16</span><span class="s2">,</span>
+    <span class="s1">np.uint32</span><span class="s2">,</span>
+<span class="s1">]</span>
+<span class="s1">_narrow_series = {</span>
+    <span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">dtype.__name__</span><span class="s2">}</span><span class="s4">-series&quot;</span><span class="s1">: tm.makeFloatSeries(name=</span><span class="s4">&quot;a&quot;</span><span class="s1">).astype(dtype)</span>
+    <span class="s2">for </span><span class="s1">dtype </span><span class="s2">in </span><span class="s1">_narrow_dtypes</span>
+<span class="s1">}</span>
+
+
+<span class="s1">@pytest.fixture(params=_narrow_series.keys())</span>
+<span class="s2">def </span><span class="s1">narrow_series(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for Series with low precision data types 
+    &quot;&quot;&quot;</span>
+    <span class="s3"># copy to avoid mutation, e.g. setting .name</span>
+    <span class="s2">return </span><span class="s1">_narrow_series[request.param].copy()</span>
+
+
+<span class="s1">_index_or_series_objs = {**indices_dict</span><span class="s2">, </span><span class="s1">**_series</span><span class="s2">, </span><span class="s1">**_narrow_series}</span>
+
+
+<span class="s1">@pytest.fixture(params=_index_or_series_objs.keys())</span>
+<span class="s2">def </span><span class="s1">index_or_series_obj(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for tests on indexes, series and series with a narrow dtype 
+    copy to avoid mutation, e.g. setting .name 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">_index_or_series_objs[request.param].copy(deep=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># DataFrames</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">empty_frame():</span>
+    <span class="s2">return </span><span class="s1">DataFrame()</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">int_frame():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for DataFrame of ints with index of unique strings 
+ 
+    Columns are ['A', 'B', 'C', 'D'] 
+ 
+                A  B  C  D 
+    vpBeWjM651  1  0  1  0 
+    5JyxmrP1En -1  0  0  0 
+    qEDaoD49U2 -1  1  0  0 
+    m66TkTfsFe  0  0  0  0 
+    EHPaNzEUFm -1  0 -1  0 
+    fpRJCevQhi  2  0  0  0 
+    OlQvnmfi3Q  0  0 -2  0 
+    ...        .. .. .. .. 
+    uB1FPlz4uP  0  0  0  1 
+    EcSe6yNzCU  0  0 -1  0 
+    L50VudaiI8 -1  1 -2  0 
+    y3bpw4nwIp  0 -1  0  0 
+    H0RdLLwrCT  1  1  0  0 
+    rY82K0vMwm  0  0  0  0 
+    1OPIUjnkjk  2  0  0  0 
+ 
+    [30 rows x 4 columns] 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">DataFrame(tm.getSeriesData()).astype(</span><span class="s4">&quot;int64&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">datetime_frame():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for DataFrame of floats with DatetimeIndex 
+ 
+    Columns are ['A', 'B', 'C', 'D'] 
+ 
+                       A         B         C         D 
+    2000-01-03 -1.122153  0.468535  0.122226  1.693711 
+    2000-01-04  0.189378  0.486100  0.007864 -1.216052 
+    2000-01-05  0.041401 -0.835752 -0.035279 -0.414357 
+    2000-01-06  0.430050  0.894352  0.090719  0.036939 
+    2000-01-07 -0.620982 -0.668211 -0.706153  1.466335 
+    2000-01-10 -0.752633  0.328434 -0.815325  0.699674 
+    2000-01-11 -2.236969  0.615737 -0.829076 -1.196106 
+    ...              ...       ...       ...       ... 
+    2000-02-03  1.642618 -0.579288  0.046005  1.385249 
+    2000-02-04 -0.544873 -1.160962 -0.284071 -1.418351 
+    2000-02-07 -2.656149 -0.601387  1.410148  0.444150 
+    2000-02-08 -1.201881 -1.289040  0.772992 -1.445300 
+    2000-02-09  1.377373  0.398619  1.008453 -0.928207 
+    2000-02-10  0.473194 -0.636677  0.984058  0.511519 
+    2000-02-11 -0.965556  0.408313 -1.312844 -0.381948 
+ 
+    [30 rows x 4 columns] 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">DataFrame(tm.getTimeSeriesData())</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">float_frame():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for DataFrame of floats with index of unique strings 
+ 
+    Columns are ['A', 'B', 'C', 'D']. 
+ 
+                       A         B         C         D 
+    P7GACiRnxd -0.465578 -0.361863  0.886172 -0.053465 
+    qZKh6afn8n -0.466693 -0.373773  0.266873  1.673901 
+    tkp0r6Qble  0.148691 -0.059051  0.174817  1.598433 
+    wP70WOCtv8  0.133045 -0.581994 -0.992240  0.261651 
+    M2AeYQMnCz -1.207959 -0.185775  0.588206  0.563938 
+    QEPzyGDYDo -0.381843 -0.758281  0.502575 -0.565053 
+    r78Jwns6dn -0.653707  0.883127  0.682199  0.206159 
+    ...              ...       ...       ...       ... 
+    IHEGx9NO0T -0.277360  0.113021 -1.018314  0.196316 
+    lPMj8K27FA -1.313667 -0.604776 -1.305618 -0.863999 
+    qa66YMWQa5  1.110525  0.475310 -0.747865  0.032121 
+    yOa0ATsmcE -0.431457  0.067094  0.096567 -0.264962 
+    65znX3uRNG  1.528446  0.160416 -0.109635 -0.032987 
+    eCOBvKqf3e  0.235281  1.622222  0.781255  0.392871 
+    xSucinXxuV -1.263557  0.252799 -0.552247  0.400426 
+ 
+    [30 rows x 4 columns] 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">DataFrame(tm.getSeriesData())</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Scalars</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[</span>
+        <span class="s1">(Interval(left=</span><span class="s5">0</span><span class="s2">, </span><span class="s1">right=</span><span class="s5">5</span><span class="s1">)</span><span class="s2">, </span><span class="s1">IntervalDtype(</span><span class="s4">&quot;int64&quot;</span><span class="s1">))</span><span class="s2">,</span>
+        <span class="s1">(Interval(left=</span><span class="s5">0.1</span><span class="s2">, </span><span class="s1">right=</span><span class="s5">0.5</span><span class="s1">)</span><span class="s2">, </span><span class="s1">IntervalDtype(</span><span class="s4">&quot;float64&quot;</span><span class="s1">))</span><span class="s2">,</span>
+        <span class="s1">(Period(</span><span class="s4">&quot;2012-01&quot;</span><span class="s2">, </span><span class="s1">freq=</span><span class="s4">&quot;M&quot;</span><span class="s1">)</span><span class="s2">, </span><span class="s4">&quot;period[M]&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(Period(</span><span class="s4">&quot;2012-02-01&quot;</span><span class="s2">, </span><span class="s1">freq=</span><span class="s4">&quot;D&quot;</span><span class="s1">)</span><span class="s2">, </span><span class="s4">&quot;period[D]&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span>
+            <span class="s1">Timestamp(</span><span class="s4">&quot;2011-01-01&quot;</span><span class="s2">, </span><span class="s1">tz=</span><span class="s4">&quot;US/Eastern&quot;</span><span class="s1">)</span><span class="s2">,</span>
+            <span class="s1">DatetimeTZDtype(tz=</span><span class="s4">&quot;US/Eastern&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(Timedelta(seconds=</span><span class="s5">500</span><span class="s1">)</span><span class="s2">, </span><span class="s4">&quot;timedelta64[ns]&quot;</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">ea_scalar_and_dtype(request):</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Operators &amp; Operations</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">_all_arithmetic_operators = [</span>
+    <span class="s4">&quot;__add__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__radd__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__sub__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__rsub__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__mul__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__rmul__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__floordiv__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__rfloordiv__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__truediv__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__rtruediv__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__pow__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__rpow__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__mod__&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;__rmod__&quot;</span><span class="s2">,</span>
+<span class="s1">]</span>
+
+
+<span class="s1">@pytest.fixture(params=_all_arithmetic_operators)</span>
+<span class="s2">def </span><span class="s1">all_arithmetic_operators(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for dunder names for common arithmetic operations. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[</span>
+        <span class="s1">operator.add</span><span class="s2">,</span>
+        <span class="s1">ops.radd</span><span class="s2">,</span>
+        <span class="s1">operator.sub</span><span class="s2">,</span>
+        <span class="s1">ops.rsub</span><span class="s2">,</span>
+        <span class="s1">operator.mul</span><span class="s2">,</span>
+        <span class="s1">ops.rmul</span><span class="s2">,</span>
+        <span class="s1">operator.truediv</span><span class="s2">,</span>
+        <span class="s1">ops.rtruediv</span><span class="s2">,</span>
+        <span class="s1">operator.floordiv</span><span class="s2">,</span>
+        <span class="s1">ops.rfloordiv</span><span class="s2">,</span>
+        <span class="s1">operator.mod</span><span class="s2">,</span>
+        <span class="s1">ops.rmod</span><span class="s2">,</span>
+        <span class="s1">operator.pow</span><span class="s2">,</span>
+        <span class="s1">ops.rpow</span><span class="s2">,</span>
+        <span class="s1">operator.eq</span><span class="s2">,</span>
+        <span class="s1">operator.ne</span><span class="s2">,</span>
+        <span class="s1">operator.lt</span><span class="s2">,</span>
+        <span class="s1">operator.le</span><span class="s2">,</span>
+        <span class="s1">operator.gt</span><span class="s2">,</span>
+        <span class="s1">operator.ge</span><span class="s2">,</span>
+        <span class="s1">operator.and_</span><span class="s2">,</span>
+        <span class="s1">ops.rand_</span><span class="s2">,</span>
+        <span class="s1">operator.xor</span><span class="s2">,</span>
+        <span class="s1">ops.rxor</span><span class="s2">,</span>
+        <span class="s1">operator.or_</span><span class="s2">,</span>
+        <span class="s1">ops.ror_</span><span class="s2">,</span>
+    <span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">all_binary_operators(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for operator and roperator arithmetic, comparison, and logical ops. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[</span>
+        <span class="s1">operator.add</span><span class="s2">,</span>
+        <span class="s1">ops.radd</span><span class="s2">,</span>
+        <span class="s1">operator.sub</span><span class="s2">,</span>
+        <span class="s1">ops.rsub</span><span class="s2">,</span>
+        <span class="s1">operator.mul</span><span class="s2">,</span>
+        <span class="s1">ops.rmul</span><span class="s2">,</span>
+        <span class="s1">operator.truediv</span><span class="s2">,</span>
+        <span class="s1">ops.rtruediv</span><span class="s2">,</span>
+        <span class="s1">operator.floordiv</span><span class="s2">,</span>
+        <span class="s1">ops.rfloordiv</span><span class="s2">,</span>
+        <span class="s1">operator.mod</span><span class="s2">,</span>
+        <span class="s1">ops.rmod</span><span class="s2">,</span>
+        <span class="s1">operator.pow</span><span class="s2">,</span>
+        <span class="s1">ops.rpow</span><span class="s2">,</span>
+    <span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">all_arithmetic_functions(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for operator and roperator arithmetic functions. 
+ 
+    Notes 
+    ----- 
+    This includes divmod and rdivmod, whereas all_arithmetic_operators 
+    does not. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">_all_numeric_reductions = [</span>
+    <span class="s4">&quot;sum&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;max&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;min&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;mean&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;prod&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;std&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;var&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;median&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;kurt&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;skew&quot;</span><span class="s2">,</span>
+<span class="s1">]</span>
+
+
+<span class="s1">@pytest.fixture(params=_all_numeric_reductions)</span>
+<span class="s2">def </span><span class="s1">all_numeric_reductions(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for numeric reduction names. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">_all_boolean_reductions = [</span><span class="s4">&quot;all&quot;</span><span class="s2">, </span><span class="s4">&quot;any&quot;</span><span class="s1">]</span>
+
+
+<span class="s1">@pytest.fixture(params=_all_boolean_reductions)</span>
+<span class="s2">def </span><span class="s1">all_boolean_reductions(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for boolean reduction names. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">_all_reductions = _all_numeric_reductions + _all_boolean_reductions</span>
+
+
+<span class="s1">@pytest.fixture(params=_all_reductions)</span>
+<span class="s2">def </span><span class="s1">all_reductions(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for all (boolean + numeric) reduction names. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;__eq__&quot;</span><span class="s2">, </span><span class="s4">&quot;__ne__&quot;</span><span class="s2">, </span><span class="s4">&quot;__le__&quot;</span><span class="s2">, </span><span class="s4">&quot;__lt__&quot;</span><span class="s2">, </span><span class="s4">&quot;__ge__&quot;</span><span class="s2">, </span><span class="s4">&quot;__gt__&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">all_compare_operators(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for dunder names for common compare operations 
+ 
+    * &gt;= 
+    * &gt; 
+    * == 
+    * != 
+    * &lt; 
+    * &lt;= 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;__le__&quot;</span><span class="s2">, </span><span class="s4">&quot;__lt__&quot;</span><span class="s2">, </span><span class="s4">&quot;__ge__&quot;</span><span class="s2">, </span><span class="s4">&quot;__gt__&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">compare_operators_no_eq_ne(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for dunder names for compare operations except == and != 
+ 
+    * &gt;= 
+    * &gt; 
+    * &lt; 
+    * &lt;= 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[</span><span class="s4">&quot;__and__&quot;</span><span class="s2">, </span><span class="s4">&quot;__rand__&quot;</span><span class="s2">, </span><span class="s4">&quot;__or__&quot;</span><span class="s2">, </span><span class="s4">&quot;__ror__&quot;</span><span class="s2">, </span><span class="s4">&quot;__xor__&quot;</span><span class="s2">, </span><span class="s4">&quot;__rxor__&quot;</span><span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">all_logical_operators(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for dunder names for common logical operations 
+ 
+    * | 
+    * &amp; 
+    * ^ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Data sets/files</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">strict_data_files(pytestconfig):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns the configuration for the test setting `--strict-data-files`. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">pytestconfig.getoption(</span><span class="s4">&quot;--strict-data-files&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">datapath(strict_data_files):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Get the path to a data file. 
+ 
+    Parameters 
+    ---------- 
+    path : str 
+        Path to the file, relative to ``pandas/tests/`` 
+ 
+    Returns 
+    ------- 
+    path including ``pandas/tests``. 
+ 
+    Raises 
+    ------ 
+    ValueError 
+        If the path doesn't exist and the --strict-data-files option is set. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">BASE_PATH = os.path.join(os.path.dirname(__file__)</span><span class="s2">, </span><span class="s4">&quot;tests&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">deco(*args):</span>
+        <span class="s1">path = os.path.join(BASE_PATH</span><span class="s2">, </span><span class="s1">*args)</span>
+        <span class="s2">if not </span><span class="s1">os.path.exists(path):</span>
+            <span class="s2">if </span><span class="s1">strict_data_files:</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span>
+                    <span class="s4">f&quot;Could not find file </span><span class="s2">{</span><span class="s1">path</span><span class="s2">} </span><span class="s4">and --strict-data-files is set.&quot;</span>
+                <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">pytest.skip(</span><span class="s4">f&quot;Could not find </span><span class="s2">{</span><span class="s1">path</span><span class="s2">}</span><span class="s4">.&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">path</span>
+
+    <span class="s2">return </span><span class="s1">deco</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">iris(datapath):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    The iris dataset as a DataFrame. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">pd.read_csv(datapath(</span><span class="s4">&quot;io&quot;</span><span class="s2">, </span><span class="s4">&quot;data&quot;</span><span class="s2">, </span><span class="s4">&quot;csv&quot;</span><span class="s2">, </span><span class="s4">&quot;iris.csv&quot;</span><span class="s1">))</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Time zones</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">TIMEZONES = [</span>
+    <span class="s2">None,</span>
+    <span class="s4">&quot;UTC&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;US/Eastern&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;Asia/Tokyo&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;dateutil/US/Pacific&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;dateutil/Asia/Singapore&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;+01:15&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;-02:15&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;UTC+01:15&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;UTC-02:15&quot;</span><span class="s2">,</span>
+    <span class="s1">tzutc()</span><span class="s2">,</span>
+    <span class="s1">tzlocal()</span><span class="s2">,</span>
+    <span class="s1">FixedOffset(</span><span class="s5">300</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">FixedOffset(</span><span class="s5">0</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">FixedOffset(-</span><span class="s5">300</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">timezone.utc</span><span class="s2">,</span>
+    <span class="s1">timezone(timedelta(hours=</span><span class="s5">1</span><span class="s1">))</span><span class="s2">,</span>
+    <span class="s1">timezone(timedelta(hours=-</span><span class="s5">1</span><span class="s1">)</span><span class="s2">, </span><span class="s1">name=</span><span class="s4">&quot;foo&quot;</span><span class="s1">)</span><span class="s2">,</span>
+<span class="s1">]</span>
+<span class="s1">TIMEZONE_IDS = [repr(i) </span><span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">TIMEZONES]</span>
+
+
+<span class="s1">@td.parametrize_fixture_doc(str(TIMEZONE_IDS))</span>
+<span class="s1">@pytest.fixture(params=TIMEZONES</span><span class="s2">, </span><span class="s1">ids=TIMEZONE_IDS)</span>
+<span class="s2">def </span><span class="s1">tz_naive_fixture(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying timezones including default (None): {0} 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@td.parametrize_fixture_doc(str(TIMEZONE_IDS[</span><span class="s5">1</span><span class="s1">:]))</span>
+<span class="s1">@pytest.fixture(params=TIMEZONES[</span><span class="s5">1</span><span class="s1">:]</span><span class="s2">, </span><span class="s1">ids=TIMEZONE_IDS[</span><span class="s5">1</span><span class="s1">:])</span>
+<span class="s2">def </span><span class="s1">tz_aware_fixture(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for trying explicit timezones: {0} 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># Generate cartesian product of tz_aware_fixture:</span>
+<span class="s1">tz_aware_fixture2 = tz_aware_fixture</span>
+
+
+<span class="s1">@pytest.fixture(scope=</span><span class="s4">&quot;module&quot;</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">datetime_tz_utc():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Yields the UTC timezone object from the datetime module. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">timezone.utc</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;utc&quot;</span><span class="s2">, </span><span class="s4">&quot;dateutil/UTC&quot;</span><span class="s2">, </span><span class="s1">utc</span><span class="s2">, </span><span class="s1">tzutc()</span><span class="s2">, </span><span class="s1">timezone.utc])</span>
+<span class="s2">def </span><span class="s1">utc_fixture(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture to provide variants of UTC timezone strings and tzinfo objects. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Dtypes</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture(params=tm.STRING_DTYPES)</span>
+<span class="s2">def </span><span class="s1">string_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parametrized fixture for string dtypes. 
+ 
+    * str 
+    * 'str' 
+    * 'U' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.BYTES_DTYPES)</span>
+<span class="s2">def </span><span class="s1">bytes_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parametrized fixture for bytes dtypes. 
+ 
+    * bytes 
+    * 'bytes' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.OBJECT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">object_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parametrized fixture for object dtypes. 
+ 
+    * object 
+    * 'object' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.DATETIME64_DTYPES)</span>
+<span class="s2">def </span><span class="s1">datetime64_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parametrized fixture for datetime64 dtypes. 
+ 
+    * 'datetime64[ns]' 
+    * 'M8[ns]' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.TIMEDELTA64_DTYPES)</span>
+<span class="s2">def </span><span class="s1">timedelta64_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parametrized fixture for timedelta64 dtypes. 
+ 
+    * 'timedelta64[ns]' 
+    * 'm8[ns]' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.FLOAT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">float_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for float dtypes. 
+ 
+    * float 
+    * 'float32' 
+    * 'float64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.FLOAT_EA_DTYPES)</span>
+<span class="s2">def </span><span class="s1">float_ea_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for float dtypes. 
+ 
+    * 'Float32' 
+    * 'Float64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.FLOAT_DTYPES + tm.FLOAT_EA_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_float_allowed_nullable_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for float dtypes. 
+ 
+    * float 
+    * 'float32' 
+    * 'float64' 
+    * 'Float32' 
+    * 'Float64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.COMPLEX_DTYPES)</span>
+<span class="s2">def </span><span class="s1">complex_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for complex dtypes. 
+ 
+    * complex 
+    * 'complex64' 
+    * 'complex128' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.SIGNED_INT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">sint_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for signed integer dtypes. 
+ 
+    * int 
+    * 'int8' 
+    * 'int16' 
+    * 'int32' 
+    * 'int64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.UNSIGNED_INT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">uint_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for unsigned integer dtypes. 
+ 
+    * 'uint8' 
+    * 'uint16' 
+    * 'uint32' 
+    * 'uint64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.ALL_INT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_int_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for any integer dtype. 
+ 
+    * int 
+    * 'int8' 
+    * 'uint8' 
+    * 'int16' 
+    * 'uint16' 
+    * 'int32' 
+    * 'uint32' 
+    * 'int64' 
+    * 'uint64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.ALL_EA_INT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_nullable_int_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for any nullable integer dtype. 
+ 
+    * 'UInt8' 
+    * 'Int8' 
+    * 'UInt16' 
+    * 'Int16' 
+    * 'UInt32' 
+    * 'Int32' 
+    * 'UInt64' 
+    * 'Int64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.ALL_INT_DTYPES + tm.ALL_EA_INT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_int_or_nullable_int_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for any nullable integer dtype. 
+ 
+    * int 
+    * 'int8' 
+    * 'uint8' 
+    * 'int16' 
+    * 'uint16' 
+    * 'int32' 
+    * 'uint32' 
+    * 'int64' 
+    * 'uint64' 
+    * 'UInt8' 
+    * 'Int8' 
+    * 'UInt16' 
+    * 'Int16' 
+    * 'UInt32' 
+    * 'Int32' 
+    * 'UInt64' 
+    * 'Int64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.ALL_EA_INT_DTYPES + tm.FLOAT_EA_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_numeric_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for any nullable integer dtype and 
+    any float ea dtypes. 
+ 
+    * 'UInt8' 
+    * 'Int8' 
+    * 'UInt16' 
+    * 'Int16' 
+    * 'UInt32' 
+    * 'Int32' 
+    * 'UInt64' 
+    * 'Int64' 
+    * 'Float32' 
+    * 'Float64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.SIGNED_EA_INT_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_signed_nullable_int_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for any signed nullable integer dtype. 
+ 
+    * 'Int8' 
+    * 'Int16' 
+    * 'Int32' 
+    * 'Int64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.ALL_REAL_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_real_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for any (purely) real numeric dtype. 
+ 
+    * int 
+    * 'int8' 
+    * 'uint8' 
+    * 'int16' 
+    * 'uint16' 
+    * 'int32' 
+    * 'uint32' 
+    * 'int64' 
+    * 'uint64' 
+    * float 
+    * 'float32' 
+    * 'float64' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=tm.ALL_NUMPY_DTYPES)</span>
+<span class="s2">def </span><span class="s1">any_numpy_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Parameterized fixture for all numpy dtypes. 
+ 
+    * bool 
+    * 'bool' 
+    * int 
+    * 'int8' 
+    * 'uint8' 
+    * 'int16' 
+    * 'uint16' 
+    * 'int32' 
+    * 'uint32' 
+    * 'int64' 
+    * 'uint64' 
+    * float 
+    * 'float32' 
+    * 'float64' 
+    * complex 
+    * 'complex64' 
+    * 'complex128' 
+    * str 
+    * 'str' 
+    * 'U' 
+    * bytes 
+    * 'bytes' 
+    * 'datetime64[ns]' 
+    * 'M8[ns]' 
+    * 'timedelta64[ns]' 
+    * 'm8[ns]' 
+    * object 
+    * 'object' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s3"># categoricals are handled separately</span>
+<span class="s1">_any_skipna_inferred_dtype = [</span>
+    <span class="s1">(</span><span class="s4">&quot;string&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;a&quot;</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s4">&quot;c&quot;</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;string&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;a&quot;</span><span class="s2">, </span><span class="s1">pd.NA</span><span class="s2">, </span><span class="s4">&quot;c&quot;</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;bytes&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s6">b&quot;a&quot;</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s6">b&quot;c&quot;</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;empty&quot;</span><span class="s2">, </span><span class="s1">[np.nan</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">np.nan])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;empty&quot;</span><span class="s2">, </span><span class="s1">[])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;mixed-integer&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;a&quot;</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s5">2</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;mixed&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s4">&quot;a&quot;</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s5">2.0</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;floating&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s5">1.0</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s5">2.0</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;integer&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s5">1</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s5">2</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;mixed-integer-float&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s5">1</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s5">2.0</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;decimal&quot;</span><span class="s2">, </span><span class="s1">[Decimal(</span><span class="s5">1</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">Decimal(</span><span class="s5">2</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;boolean&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s2">True, </span><span class="s1">np.nan</span><span class="s2">, False</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;boolean&quot;</span><span class="s2">, </span><span class="s1">[</span><span class="s2">True, </span><span class="s1">pd.NA</span><span class="s2">, False</span><span class="s1">])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;datetime64&quot;</span><span class="s2">, </span><span class="s1">[np.datetime64(</span><span class="s4">&quot;2013-01-01&quot;</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">np.datetime64(</span><span class="s4">&quot;2018-01-01&quot;</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;datetime&quot;</span><span class="s2">, </span><span class="s1">[pd.Timestamp(</span><span class="s4">&quot;20130101&quot;</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">pd.Timestamp(</span><span class="s4">&quot;20180101&quot;</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;date&quot;</span><span class="s2">, </span><span class="s1">[date(</span><span class="s5">2013</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">date(</span><span class="s5">2018</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s3"># The following two dtypes are commented out due to GH 23554</span>
+    <span class="s3"># ('complex', [1 + 1j, np.nan, 2 + 2j]),</span>
+    <span class="s3"># ('timedelta64', [np.timedelta64(1, 'D'),</span>
+    <span class="s3">#                  np.nan, np.timedelta64(2, 'D')]),</span>
+    <span class="s1">(</span><span class="s4">&quot;timedelta&quot;</span><span class="s2">, </span><span class="s1">[timedelta(</span><span class="s5">1</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">timedelta(</span><span class="s5">2</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;time&quot;</span><span class="s2">, </span><span class="s1">[time(</span><span class="s5">1</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">time(</span><span class="s5">2</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;period&quot;</span><span class="s2">, </span><span class="s1">[pd.Period(</span><span class="s5">2013</span><span class="s1">)</span><span class="s2">, </span><span class="s1">pd.NaT</span><span class="s2">, </span><span class="s1">pd.Period(</span><span class="s5">2018</span><span class="s1">)])</span><span class="s2">,</span>
+    <span class="s1">(</span><span class="s4">&quot;interval&quot;</span><span class="s2">, </span><span class="s1">[pd.Interval(</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s1">)</span><span class="s2">, </span><span class="s1">np.nan</span><span class="s2">, </span><span class="s1">pd.Interval(</span><span class="s5">0</span><span class="s2">, </span><span class="s5">2</span><span class="s1">)])</span><span class="s2">,</span>
+<span class="s1">]</span>
+<span class="s1">ids</span><span class="s2">, </span><span class="s1">_ = zip(*_any_skipna_inferred_dtype)  </span><span class="s3"># use inferred type as fixture-id</span>
+
+
+<span class="s1">@pytest.fixture(params=_any_skipna_inferred_dtype</span><span class="s2">, </span><span class="s1">ids=ids)</span>
+<span class="s2">def </span><span class="s1">any_skipna_inferred_dtype(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for all inferred dtypes from _libs.lib.infer_dtype 
+ 
+    The covered (inferred) types are: 
+    * 'string' 
+    * 'empty' 
+    * 'bytes' 
+    * 'mixed' 
+    * 'mixed-integer' 
+    * 'mixed-integer-float' 
+    * 'floating' 
+    * 'integer' 
+    * 'decimal' 
+    * 'boolean' 
+    * 'datetime64' 
+    * 'datetime' 
+    * 'date' 
+    * 'timedelta' 
+    * 'time' 
+    * 'period' 
+    * 'interval' 
+ 
+    Returns 
+    ------- 
+    inferred_dtype : str 
+        The string for the inferred dtype from _libs.lib.infer_dtype 
+    values : np.ndarray 
+        An array of object dtype that will be inferred to have 
+        `inferred_dtype` 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; import pandas._libs.lib as lib 
+    &gt;&gt;&gt; 
+    &gt;&gt;&gt; def test_something(any_skipna_inferred_dtype): 
+    ...     inferred_dtype, values = any_skipna_inferred_dtype 
+    ...     # will pass 
+    ...     assert lib.infer_dtype(values, skipna=True) == inferred_dtype 
+    &quot;&quot;&quot;</span>
+    <span class="s1">inferred_dtype</span><span class="s2">, </span><span class="s1">values = request.param</span>
+    <span class="s1">values = np.array(values</span><span class="s2">, </span><span class="s1">dtype=object)  </span><span class="s3"># object dtype to avoid casting</span>
+
+    <span class="s3"># correctness of inference tested in tests/dtypes/test_inference.py</span>
+    <span class="s2">return </span><span class="s1">inferred_dtype</span><span class="s2">, </span><span class="s1">values</span>
+
+
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s3"># Misc</span>
+<span class="s3"># ----------------------------------------------------------------</span>
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">ip():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Get an instance of IPython.InteractiveShell. 
+ 
+    Will raise a skip if IPython is not installed. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">pytest.importorskip(</span><span class="s4">&quot;IPython&quot;</span><span class="s2">, </span><span class="s1">minversion=</span><span class="s4">&quot;6.0.0&quot;</span><span class="s1">)</span>
+    <span class="s2">from </span><span class="s1">IPython.core.interactiveshell </span><span class="s2">import </span><span class="s1">InteractiveShell</span>
+
+    <span class="s3"># GH#35711 make sure sqlite history file handle is not leaked</span>
+    <span class="s2">from </span><span class="s1">traitlets.config </span><span class="s2">import </span><span class="s1">Config  </span><span class="s3"># isort:skip</span>
+
+    <span class="s1">c = Config()</span>
+    <span class="s1">c.HistoryManager.hist_file = </span><span class="s4">&quot;:memory:&quot;</span>
+
+    <span class="s2">return </span><span class="s1">InteractiveShell(config=c)</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s4">&quot;bsr&quot;</span><span class="s2">, </span><span class="s4">&quot;coo&quot;</span><span class="s2">, </span><span class="s4">&quot;csc&quot;</span><span class="s2">, </span><span class="s4">&quot;csr&quot;</span><span class="s2">, </span><span class="s4">&quot;dia&quot;</span><span class="s2">, </span><span class="s4">&quot;dok&quot;</span><span class="s2">, </span><span class="s4">&quot;lil&quot;</span><span class="s1">])</span>
+<span class="s2">def </span><span class="s1">spmatrix(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Yields scipy sparse matrix classes. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">from </span><span class="s1">scipy </span><span class="s2">import </span><span class="s1">sparse</span>
+
+    <span class="s2">return </span><span class="s1">getattr(sparse</span><span class="s2">, </span><span class="s1">request.param + </span><span class="s4">&quot;_matrix&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[</span>
+        <span class="s1">getattr(pd.offsets</span><span class="s2">, </span><span class="s1">o)</span>
+        <span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">pd.offsets.__all__</span>
+        <span class="s2">if </span><span class="s1">issubclass(getattr(pd.offsets</span><span class="s2">, </span><span class="s1">o)</span><span class="s2">, </span><span class="s1">pd.offsets.Tick)</span>
+    <span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">tick_classes(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Fixture for Tick based datetime offsets available for a time series. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture(params=[</span><span class="s2">None, lambda </span><span class="s1">x: x])</span>
+<span class="s2">def </span><span class="s1">sort_by_key(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Simple fixture for testing keys in sorting methods. 
+    Tests None (no key) and the identity key. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+
+
+<span class="s1">@pytest.fixture()</span>
+<span class="s2">def </span><span class="s1">fsspectest():</span>
+    <span class="s1">pytest.importorskip(</span><span class="s4">&quot;fsspec&quot;</span><span class="s1">)</span>
+    <span class="s2">from </span><span class="s1">fsspec </span><span class="s2">import </span><span class="s1">register_implementation</span>
+    <span class="s2">from </span><span class="s1">fsspec.implementations.memory </span><span class="s2">import </span><span class="s1">MemoryFileSystem</span>
+    <span class="s2">from </span><span class="s1">fsspec.registry </span><span class="s2">import </span><span class="s1">_registry </span><span class="s2">as </span><span class="s1">registry</span>
+
+    <span class="s2">class </span><span class="s1">TestMemoryFS(MemoryFileSystem):</span>
+        <span class="s1">protocol = </span><span class="s4">&quot;testmem&quot;</span>
+        <span class="s1">test = [</span><span class="s2">None</span><span class="s1">]</span>
+
+        <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+            <span class="s1">self.test[</span><span class="s5">0</span><span class="s1">] = kwargs.pop(</span><span class="s4">&quot;test&quot;</span><span class="s2">, None</span><span class="s1">)</span>
+            <span class="s1">super().__init__(**kwargs)</span>
+
+    <span class="s1">register_implementation(</span><span class="s4">&quot;testmem&quot;</span><span class="s2">, </span><span class="s1">TestMemoryFS</span><span class="s2">, </span><span class="s1">clobber=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">yield </span><span class="s1">TestMemoryFS()</span>
+    <span class="s1">registry.pop(</span><span class="s4">&quot;testmem&quot;</span><span class="s2">, None</span><span class="s1">)</span>
+    <span class="s1">TestMemoryFS.test[</span><span class="s5">0</span><span class="s1">] = </span><span class="s2">None</span>
+    <span class="s1">TestMemoryFS.store.clear()</span>
+
+
+<span class="s1">@pytest.fixture(</span>
+    <span class="s1">params=[</span>
+        <span class="s1">(</span><span class="s4">&quot;foo&quot;</span><span class="s2">, None, None</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s4">&quot;Egon&quot;</span><span class="s2">, </span><span class="s4">&quot;Venkman&quot;</span><span class="s2">, None</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s4">&quot;NCC1701D&quot;</span><span class="s2">, </span><span class="s4">&quot;NCC1701D&quot;</span><span class="s2">, </span><span class="s4">&quot;NCC1701D&quot;</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">]</span>
+<span class="s1">)</span>
+<span class="s2">def </span><span class="s1">names(request):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    A 3-tuple of names, the first two for operands, the last for a result. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">request.param</span>
+</pre>
+</body>
+</html>

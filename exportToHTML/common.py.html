@@ -1,0 +1,881 @@
+<html>
+<head>
+<title>common.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6a8759;}
+.s4 { color: #808080;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+common.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Common IO api utilities&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">bz2</span>
+<span class="s2">import </span><span class="s1">codecs</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">abc</span>
+<span class="s2">import </span><span class="s1">dataclasses</span>
+<span class="s2">import </span><span class="s1">gzip</span>
+<span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">BufferedIOBase</span><span class="s2">, </span><span class="s1">BytesIO</span><span class="s2">, </span><span class="s1">RawIOBase</span><span class="s2">, </span><span class="s1">StringIO</span><span class="s2">, </span><span class="s1">TextIOWrapper</span>
+<span class="s2">import </span><span class="s1">mmap</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">IO</span><span class="s2">, </span><span class="s1">Any</span><span class="s2">, </span><span class="s1">AnyStr</span><span class="s2">, </span><span class="s1">Dict</span><span class="s2">, </span><span class="s1">List</span><span class="s2">, </span><span class="s1">Mapping</span><span class="s2">, </span><span class="s1">Optional</span><span class="s2">, </span><span class="s1">Tuple</span><span class="s2">, </span><span class="s1">Union</span><span class="s2">, </span><span class="s1">cast</span>
+<span class="s2">from </span><span class="s1">urllib.parse </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">urljoin</span><span class="s2">,</span>
+    <span class="s1">urlparse </span><span class="s2">as </span><span class="s1">parse_url</span><span class="s2">,</span>
+    <span class="s1">uses_netloc</span><span class="s2">,</span>
+    <span class="s1">uses_params</span><span class="s2">,</span>
+    <span class="s1">uses_relative</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s2">import </span><span class="s1">zipfile</span>
+
+<span class="s2">from </span><span class="s1">pandas._typing </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Buffer</span><span class="s2">,</span>
+    <span class="s1">CompressionDict</span><span class="s2">,</span>
+    <span class="s1">CompressionOptions</span><span class="s2">,</span>
+    <span class="s1">FileOrBuffer</span><span class="s2">,</span>
+    <span class="s1">FilePathOrBuffer</span><span class="s2">,</span>
+    <span class="s1">StorageOptions</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">pandas.compat </span><span class="s2">import </span><span class="s1">get_lzma_file</span><span class="s2">, </span><span class="s1">import_lzma</span>
+<span class="s2">from </span><span class="s1">pandas.compat._optional </span><span class="s2">import </span><span class="s1">import_optional_dependency</span>
+
+<span class="s2">from </span><span class="s1">pandas.core.dtypes.common </span><span class="s2">import </span><span class="s1">is_file_like</span>
+
+<span class="s1">lzma = import_lzma()</span>
+
+
+<span class="s1">_VALID_URLS = set(uses_relative + uses_netloc + uses_params)</span>
+<span class="s1">_VALID_URLS.discard(</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">@dataclasses.dataclass</span>
+<span class="s2">class </span><span class="s1">IOArgs:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return value of io/common.py:_get_filepath_or_buffer. 
+ 
+    Note (copy&amp;past from io/parsers): 
+    filepath_or_buffer can be Union[FilePathOrBuffer, s3fs.S3File, gcsfs.GCSFile] 
+    though mypy handling of conditional imports is difficult. 
+    See https://github.com/python/mypy/issues/1297 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">filepath_or_buffer: FileOrBuffer</span>
+    <span class="s1">encoding: str</span>
+    <span class="s1">mode: str</span>
+    <span class="s1">compression: CompressionDict</span>
+    <span class="s1">should_close: bool = </span><span class="s2">False</span>
+
+
+<span class="s1">@dataclasses.dataclass</span>
+<span class="s2">class </span><span class="s1">IOHandles:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return value of io/common.py:get_handle 
+ 
+    Can be used as a context manager. 
+ 
+    This is used to easily close created buffers and to handle corner cases when 
+    TextIOWrapper is inserted. 
+ 
+    handle: The file handle to be used. 
+    created_handles: All file handles that are created by get_handle 
+    is_wrapped: Whether a TextIOWrapper needs to be detached. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">handle: Buffer</span>
+    <span class="s1">compression: CompressionDict</span>
+    <span class="s1">created_handles: List[Buffer] = dataclasses.field(default_factory=list)</span>
+    <span class="s1">is_wrapped: bool = </span><span class="s2">False</span>
+    <span class="s1">is_mmap: bool = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">close(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Close all created buffers. 
+ 
+        Note: If a TextIOWrapper was inserted, it is flushed and detached to 
+        avoid closing the potentially user-created buffer. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.is_wrapped:</span>
+            <span class="s2">assert </span><span class="s1">isinstance(self.handle</span><span class="s2">, </span><span class="s1">TextIOWrapper)</span>
+            <span class="s1">self.handle.flush()</span>
+            <span class="s1">self.handle.detach()</span>
+            <span class="s1">self.created_handles.remove(self.handle)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">handle </span><span class="s2">in </span><span class="s1">self.created_handles:</span>
+                <span class="s1">handle.close()</span>
+        <span class="s2">except </span><span class="s1">(OSError</span><span class="s2">, </span><span class="s1">ValueError):</span>
+            <span class="s2">pass</span>
+        <span class="s1">self.created_handles = []</span>
+        <span class="s1">self.is_wrapped = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">__enter__(self) -&gt; </span><span class="s3">&quot;IOHandles&quot;</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">__exit__(self</span><span class="s2">, </span><span class="s1">*args: Any) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.close()</span>
+
+
+<span class="s2">def </span><span class="s1">is_url(url) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Check to see if a URL has a valid protocol. 
+ 
+    Parameters 
+    ---------- 
+    url : str or unicode 
+ 
+    Returns 
+    ------- 
+    isurl : bool 
+        If `url` has a valid protocol return True otherwise False. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">isinstance(url</span><span class="s2">, </span><span class="s1">str):</span>
+        <span class="s2">return False</span>
+    <span class="s2">return </span><span class="s1">parse_url(url).scheme </span><span class="s2">in </span><span class="s1">_VALID_URLS</span>
+
+
+<span class="s2">def </span><span class="s1">_expand_user(filepath_or_buffer: FileOrBuffer[AnyStr]) -&gt; FileOrBuffer[AnyStr]:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return the argument with an initial component of ~ or ~user 
+    replaced by that user's home directory. 
+ 
+    Parameters 
+    ---------- 
+    filepath_or_buffer : object to be converted if possible 
+ 
+    Returns 
+    ------- 
+    expanded_filepath_or_buffer : an expanded filepath or the 
+                                  input if not expandable 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(filepath_or_buffer</span><span class="s2">, </span><span class="s1">str):</span>
+        <span class="s2">return </span><span class="s1">os.path.expanduser(filepath_or_buffer)</span>
+    <span class="s2">return </span><span class="s1">filepath_or_buffer</span>
+
+
+<span class="s2">def </span><span class="s1">validate_header_arg(header) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s2">if </span><span class="s1">isinstance(header</span><span class="s2">, </span><span class="s1">bool):</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span>
+            <span class="s3">&quot;Passing a bool to header is invalid. Use header=None for no header or &quot;</span>
+            <span class="s3">&quot;header=int or list-like of ints to specify &quot;</span>
+            <span class="s3">&quot;the row(s) making up the column names&quot;</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">stringify_path(</span>
+    <span class="s1">filepath_or_buffer: FilePathOrBuffer[AnyStr]</span><span class="s2">,</span>
+    <span class="s1">convert_file_like: bool = </span><span class="s2">False,</span>
+<span class="s1">) -&gt; FileOrBuffer[AnyStr]:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Attempt to convert a path-like object to a string. 
+ 
+    Parameters 
+    ---------- 
+    filepath_or_buffer : object to be converted 
+ 
+    Returns 
+    ------- 
+    str_filepath_or_buffer : maybe a string version of the object 
+ 
+    Notes 
+    ----- 
+    Objects supporting the fspath protocol (python 3.6+) are coerced 
+    according to its __fspath__ method. 
+ 
+    Any other object is passed through unchanged, which includes bytes, 
+    strings, buffers, or anything else that's not even path-like. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">convert_file_like </span><span class="s2">and </span><span class="s1">is_file_like(filepath_or_buffer):</span>
+        <span class="s4"># GH 38125: some fsspec objects implement os.PathLike but have already opened a</span>
+        <span class="s4"># file. This prevents opening the file a second time. infer_compression calls</span>
+        <span class="s4"># this function with convert_file_like=True to infer the compression.</span>
+        <span class="s2">return </span><span class="s1">cast(FileOrBuffer[AnyStr]</span><span class="s2">, </span><span class="s1">filepath_or_buffer)</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(filepath_or_buffer</span><span class="s2">, </span><span class="s1">os.PathLike):</span>
+        <span class="s1">filepath_or_buffer = filepath_or_buffer.__fspath__()</span>
+    <span class="s2">return </span><span class="s1">_expand_user(filepath_or_buffer)</span>
+
+
+<span class="s2">def </span><span class="s1">urlopen(*args</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Lazy-import wrapper for stdlib urlopen, as that imports a big chunk of 
+    the stdlib. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">import </span><span class="s1">urllib.request</span>
+
+    <span class="s2">return </span><span class="s1">urllib.request.urlopen(*args</span><span class="s2">, </span><span class="s1">**kwargs)</span>
+
+
+<span class="s2">def </span><span class="s1">is_fsspec_url(url: FilePathOrBuffer) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns true if the given URL looks like 
+    something fsspec can handle 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">isinstance(url</span><span class="s2">, </span><span class="s1">str)</span>
+        <span class="s2">and </span><span class="s3">&quot;://&quot; </span><span class="s2">in </span><span class="s1">url</span>
+        <span class="s2">and not </span><span class="s1">url.startswith((</span><span class="s3">&quot;http://&quot;</span><span class="s2">, </span><span class="s3">&quot;https://&quot;</span><span class="s1">))</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_get_filepath_or_buffer(</span>
+    <span class="s1">filepath_or_buffer: FilePathOrBuffer</span><span class="s2">,</span>
+    <span class="s1">encoding: str = </span><span class="s3">&quot;utf-8&quot;</span><span class="s2">,</span>
+    <span class="s1">compression: CompressionOptions = </span><span class="s2">None,</span>
+    <span class="s1">mode: str = </span><span class="s3">&quot;r&quot;</span><span class="s2">,</span>
+    <span class="s1">storage_options: StorageOptions = </span><span class="s2">None,</span>
+<span class="s1">) -&gt; IOArgs:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    If the filepath_or_buffer is a url, translate and return the buffer. 
+    Otherwise passthrough. 
+ 
+    Parameters 
+    ---------- 
+    filepath_or_buffer : a url, filepath (str, py.path.local or pathlib.Path), 
+                         or buffer 
+    compression : {{'gzip', 'bz2', 'zip', 'xz', None}}, optional 
+    encoding : the encoding to use to decode bytes, default is 'utf-8' 
+    mode : str, optional 
+ 
+    storage_options : dict, optional 
+        Extra options that make sense for a particular storage connection, e.g. 
+        host, port, username, password, etc., if using a URL that will 
+        be parsed by ``fsspec``, e.g., starting &quot;s3://&quot;, &quot;gcs://&quot;. An error 
+        will be raised if providing this argument with a local path or 
+        a file-like buffer. See the fsspec and backend storage implementation 
+        docs for the set of allowed keys and values 
+ 
+        .. versionadded:: 1.2.0 
+ 
+    ..versionchange:: 1.2.0 
+ 
+      Returns the dataclass IOArgs. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">filepath_or_buffer = stringify_path(filepath_or_buffer)</span>
+
+    <span class="s4"># handle compression dict</span>
+    <span class="s1">compression_method</span><span class="s2">, </span><span class="s1">compression = get_compression_method(compression)</span>
+    <span class="s1">compression_method = infer_compression(filepath_or_buffer</span><span class="s2">, </span><span class="s1">compression_method)</span>
+
+    <span class="s4"># GH21227 internal compression is not used for non-binary handles.</span>
+    <span class="s2">if </span><span class="s1">compression_method </span><span class="s2">and </span><span class="s1">hasattr(filepath_or_buffer</span><span class="s2">, </span><span class="s3">&quot;write&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s3">&quot;b&quot; </span><span class="s2">not in </span><span class="s1">mode:</span>
+        <span class="s1">warnings.warn(</span>
+            <span class="s3">&quot;compression has no effect when passing a non-binary object as input.&quot;</span><span class="s2">,</span>
+            <span class="s1">RuntimeWarning</span><span class="s2">,</span>
+            <span class="s1">stacklevel=</span><span class="s5">2</span><span class="s2">,</span>
+        <span class="s1">)</span>
+        <span class="s1">compression_method = </span><span class="s2">None</span>
+
+    <span class="s1">compression = dict(compression</span><span class="s2">, </span><span class="s1">method=compression_method)</span>
+
+    <span class="s4"># uniform encoding names</span>
+    <span class="s2">if </span><span class="s1">encoding </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">encoding = encoding.replace(</span><span class="s3">&quot;_&quot;</span><span class="s2">, </span><span class="s3">&quot;-&quot;</span><span class="s1">).lower()</span>
+
+    <span class="s4"># bz2 and xz do not write the byte order mark for utf-16 and utf-32</span>
+    <span class="s4"># print a warning when writing such files</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s3">&quot;w&quot; </span><span class="s2">in </span><span class="s1">mode</span>
+        <span class="s2">and </span><span class="s1">compression_method </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;bz2&quot;</span><span class="s2">, </span><span class="s3">&quot;xz&quot;</span><span class="s1">]</span>
+        <span class="s2">and </span><span class="s1">encoding </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;utf-16&quot;</span><span class="s2">, </span><span class="s3">&quot;utf-32&quot;</span><span class="s1">]</span>
+    <span class="s1">):</span>
+        <span class="s1">warnings.warn(</span>
+            <span class="s3">f&quot;</span><span class="s2">{</span><span class="s1">compression</span><span class="s2">} </span><span class="s3">will not write the byte order mark for </span><span class="s2">{</span><span class="s1">encoding</span><span class="s2">}</span><span class="s3">&quot;</span><span class="s2">,</span>
+            <span class="s1">UnicodeWarning</span><span class="s2">,</span>
+        <span class="s1">)</span>
+
+    <span class="s4"># Use binary mode when converting path-like objects to file-like objects (fsspec)</span>
+    <span class="s4"># except when text mode is explicitly requested. The original mode is returned if</span>
+    <span class="s4"># fsspec is not used.</span>
+    <span class="s1">fsspec_mode = mode</span>
+    <span class="s2">if </span><span class="s3">&quot;t&quot; </span><span class="s2">not in </span><span class="s1">fsspec_mode </span><span class="s2">and </span><span class="s3">&quot;b&quot; </span><span class="s2">not in </span><span class="s1">fsspec_mode:</span>
+        <span class="s1">fsspec_mode += </span><span class="s3">&quot;b&quot;</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(filepath_or_buffer</span><span class="s2">, </span><span class="s1">str) </span><span class="s2">and </span><span class="s1">is_url(filepath_or_buffer):</span>
+        <span class="s4"># TODO: fsspec can also handle HTTP via requests, but leaving this unchanged</span>
+        <span class="s2">if </span><span class="s1">storage_options:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span>
+                <span class="s3">&quot;storage_options passed with file object or non-fsspec file path&quot;</span>
+            <span class="s1">)</span>
+        <span class="s1">req = urlopen(filepath_or_buffer)</span>
+        <span class="s1">content_encoding = req.headers.get(</span><span class="s3">&quot;Content-Encoding&quot;</span><span class="s2">, None</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">content_encoding == </span><span class="s3">&quot;gzip&quot;</span><span class="s1">:</span>
+            <span class="s4"># Override compression based on Content-Encoding header</span>
+            <span class="s1">compression = {</span><span class="s3">&quot;method&quot;</span><span class="s1">: </span><span class="s3">&quot;gzip&quot;</span><span class="s1">}</span>
+        <span class="s1">reader = BytesIO(req.read())</span>
+        <span class="s1">req.close()</span>
+        <span class="s2">return </span><span class="s1">IOArgs(</span>
+            <span class="s1">filepath_or_buffer=reader</span><span class="s2">,</span>
+            <span class="s1">encoding=encoding</span><span class="s2">,</span>
+            <span class="s1">compression=compression</span><span class="s2">,</span>
+            <span class="s1">should_close=</span><span class="s2">True,</span>
+            <span class="s1">mode=fsspec_mode</span><span class="s2">,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">is_fsspec_url(filepath_or_buffer):</span>
+        <span class="s2">assert </span><span class="s1">isinstance(</span>
+            <span class="s1">filepath_or_buffer</span><span class="s2">, </span><span class="s1">str</span>
+        <span class="s1">)  </span><span class="s4"># just to appease mypy for this branch</span>
+        <span class="s4"># two special-case s3-like protocols; these have special meaning in Hadoop,</span>
+        <span class="s4"># but are equivalent to just &quot;s3&quot; from fsspec's point of view</span>
+        <span class="s4"># cc #11071</span>
+        <span class="s2">if </span><span class="s1">filepath_or_buffer.startswith(</span><span class="s3">&quot;s3a://&quot;</span><span class="s1">):</span>
+            <span class="s1">filepath_or_buffer = filepath_or_buffer.replace(</span><span class="s3">&quot;s3a://&quot;</span><span class="s2">, </span><span class="s3">&quot;s3://&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">filepath_or_buffer.startswith(</span><span class="s3">&quot;s3n://&quot;</span><span class="s1">):</span>
+            <span class="s1">filepath_or_buffer = filepath_or_buffer.replace(</span><span class="s3">&quot;s3n://&quot;</span><span class="s2">, </span><span class="s3">&quot;s3://&quot;</span><span class="s1">)</span>
+        <span class="s1">fsspec = import_optional_dependency(</span><span class="s3">&quot;fsspec&quot;</span><span class="s1">)</span>
+
+        <span class="s4"># If botocore is installed we fallback to reading with anon=True</span>
+        <span class="s4"># to allow reads from public buckets</span>
+        <span class="s1">err_types_to_retry_with_anon: List[Any] = []</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">import_optional_dependency(</span><span class="s3">&quot;botocore&quot;</span><span class="s1">)</span>
+            <span class="s2">from </span><span class="s1">botocore.exceptions </span><span class="s2">import </span><span class="s1">ClientError</span><span class="s2">, </span><span class="s1">NoCredentialsError</span>
+
+            <span class="s1">err_types_to_retry_with_anon = [</span>
+                <span class="s1">ClientError</span><span class="s2">,</span>
+                <span class="s1">NoCredentialsError</span><span class="s2">,</span>
+                <span class="s1">PermissionError</span><span class="s2">,</span>
+            <span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s2">pass</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">file_obj = fsspec.open(</span>
+                <span class="s1">filepath_or_buffer</span><span class="s2">, </span><span class="s1">mode=fsspec_mode</span><span class="s2">, </span><span class="s1">**(storage_options </span><span class="s2">or </span><span class="s1">{})</span>
+            <span class="s1">).open()</span>
+        <span class="s4"># GH 34626 Reads from Public Buckets without Credentials needs anon=True</span>
+        <span class="s2">except </span><span class="s1">tuple(err_types_to_retry_with_anon):</span>
+            <span class="s2">if </span><span class="s1">storage_options </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">storage_options = {</span><span class="s3">&quot;anon&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">}</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s4"># don't mutate user input.</span>
+                <span class="s1">storage_options = dict(storage_options)</span>
+                <span class="s1">storage_options[</span><span class="s3">&quot;anon&quot;</span><span class="s1">] = </span><span class="s2">True</span>
+            <span class="s1">file_obj = fsspec.open(</span>
+                <span class="s1">filepath_or_buffer</span><span class="s2">, </span><span class="s1">mode=fsspec_mode</span><span class="s2">, </span><span class="s1">**(storage_options </span><span class="s2">or </span><span class="s1">{})</span>
+            <span class="s1">).open()</span>
+
+        <span class="s2">return </span><span class="s1">IOArgs(</span>
+            <span class="s1">filepath_or_buffer=file_obj</span><span class="s2">,</span>
+            <span class="s1">encoding=encoding</span><span class="s2">,</span>
+            <span class="s1">compression=compression</span><span class="s2">,</span>
+            <span class="s1">should_close=</span><span class="s2">True,</span>
+            <span class="s1">mode=fsspec_mode</span><span class="s2">,</span>
+        <span class="s1">)</span>
+    <span class="s2">elif </span><span class="s1">storage_options:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span>
+            <span class="s3">&quot;storage_options passed with file object or non-fsspec file path&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(filepath_or_buffer</span><span class="s2">, </span><span class="s1">(str</span><span class="s2">, </span><span class="s1">bytes</span><span class="s2">, </span><span class="s1">mmap.mmap)):</span>
+        <span class="s2">return </span><span class="s1">IOArgs(</span>
+            <span class="s1">filepath_or_buffer=_expand_user(filepath_or_buffer)</span><span class="s2">,</span>
+            <span class="s1">encoding=encoding</span><span class="s2">,</span>
+            <span class="s1">compression=compression</span><span class="s2">,</span>
+            <span class="s1">should_close=</span><span class="s2">False,</span>
+            <span class="s1">mode=mode</span><span class="s2">,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">if not </span><span class="s1">is_file_like(filepath_or_buffer):</span>
+        <span class="s1">msg = </span><span class="s3">f&quot;Invalid file path or buffer object type: </span><span class="s2">{</span><span class="s1">type(filepath_or_buffer)</span><span class="s2">}</span><span class="s3">&quot;</span>
+        <span class="s2">raise </span><span class="s1">ValueError(msg)</span>
+
+    <span class="s2">return </span><span class="s1">IOArgs(</span>
+        <span class="s1">filepath_or_buffer=filepath_or_buffer</span><span class="s2">,</span>
+        <span class="s1">encoding=encoding</span><span class="s2">,</span>
+        <span class="s1">compression=compression</span><span class="s2">,</span>
+        <span class="s1">should_close=</span><span class="s2">False,</span>
+        <span class="s1">mode=mode</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">file_path_to_url(path: str) -&gt; str:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    converts an absolute native path to a FILE URL. 
+ 
+    Parameters 
+    ---------- 
+    path : a path in native format 
+ 
+    Returns 
+    ------- 
+    a valid FILE URL 
+    &quot;&quot;&quot;</span>
+    <span class="s4"># lazify expensive import (~30ms)</span>
+    <span class="s2">from </span><span class="s1">urllib.request </span><span class="s2">import </span><span class="s1">pathname2url</span>
+
+    <span class="s2">return </span><span class="s1">urljoin(</span><span class="s3">&quot;file:&quot;</span><span class="s2">, </span><span class="s1">pathname2url(path))</span>
+
+
+<span class="s1">_compression_to_extension = {</span><span class="s3">&quot;gzip&quot;</span><span class="s1">: </span><span class="s3">&quot;.gz&quot;</span><span class="s2">, </span><span class="s3">&quot;bz2&quot;</span><span class="s1">: </span><span class="s3">&quot;.bz2&quot;</span><span class="s2">, </span><span class="s3">&quot;zip&quot;</span><span class="s1">: </span><span class="s3">&quot;.zip&quot;</span><span class="s2">, </span><span class="s3">&quot;xz&quot;</span><span class="s1">: </span><span class="s3">&quot;.xz&quot;</span><span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">get_compression_method(</span>
+    <span class="s1">compression: CompressionOptions</span><span class="s2">,</span>
+<span class="s1">) -&gt; Tuple[Optional[str]</span><span class="s2">, </span><span class="s1">CompressionDict]:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Simplifies a compression argument to a compression method string and 
+    a mapping containing additional arguments. 
+ 
+    Parameters 
+    ---------- 
+    compression : str or mapping 
+        If string, specifies the compression method. If mapping, value at key 
+        'method' specifies compression method. 
+ 
+    Returns 
+    ------- 
+    tuple of ({compression method}, Optional[str] 
+              {compression arguments}, Dict[str, Any]) 
+ 
+    Raises 
+    ------ 
+    ValueError on mapping missing 'method' key 
+    &quot;&quot;&quot;</span>
+    <span class="s1">compression_method: Optional[str]</span>
+    <span class="s2">if </span><span class="s1">isinstance(compression</span><span class="s2">, </span><span class="s1">Mapping):</span>
+        <span class="s1">compression_args = dict(compression)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">compression_method = compression_args.pop(</span><span class="s3">&quot;method&quot;</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">KeyError </span><span class="s2">as </span><span class="s1">err:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;If mapping, compression must have key 'method'&quot;</span><span class="s1">) </span><span class="s2">from </span><span class="s1">err</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">compression_args = {}</span>
+        <span class="s1">compression_method = compression</span>
+    <span class="s2">return </span><span class="s1">compression_method</span><span class="s2">, </span><span class="s1">compression_args</span>
+
+
+<span class="s2">def </span><span class="s1">infer_compression(</span>
+    <span class="s1">filepath_or_buffer: FilePathOrBuffer</span><span class="s2">, </span><span class="s1">compression: Optional[str]</span>
+<span class="s1">) -&gt; Optional[str]:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Get the compression method for filepath_or_buffer. If compression='infer', 
+    the inferred compression method is returned. Otherwise, the input 
+    compression method is returned unchanged, unless it's invalid, in which 
+    case an error is raised. 
+ 
+    Parameters 
+    ---------- 
+    filepath_or_buffer : str or file handle 
+        File path or object. 
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None} 
+        If 'infer' and `filepath_or_buffer` is path-like, then detect 
+        compression from the following extensions: '.gz', '.bz2', '.zip', 
+        or '.xz' (otherwise no compression). 
+ 
+    Returns 
+    ------- 
+    string or None 
+ 
+    Raises 
+    ------ 
+    ValueError on invalid compression specified. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">compression </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return None</span>
+
+    <span class="s4"># Infer compression</span>
+    <span class="s2">if </span><span class="s1">compression == </span><span class="s3">&quot;infer&quot;</span><span class="s1">:</span>
+        <span class="s4"># Convert all path types (e.g. pathlib.Path) to strings</span>
+        <span class="s1">filepath_or_buffer = stringify_path(filepath_or_buffer</span><span class="s2">, </span><span class="s1">convert_file_like=</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">isinstance(filepath_or_buffer</span><span class="s2">, </span><span class="s1">str):</span>
+            <span class="s4"># Cannot infer compression of a buffer, assume no compression</span>
+            <span class="s2">return None</span>
+
+        <span class="s4"># Infer compression from the filename/URL extension</span>
+        <span class="s2">for </span><span class="s1">compression</span><span class="s2">, </span><span class="s1">extension </span><span class="s2">in </span><span class="s1">_compression_to_extension.items():</span>
+            <span class="s2">if </span><span class="s1">filepath_or_buffer.lower().endswith(extension):</span>
+                <span class="s2">return </span><span class="s1">compression</span>
+        <span class="s2">return None</span>
+
+    <span class="s4"># Compression has been specified. Check that it's valid</span>
+    <span class="s2">if </span><span class="s1">compression </span><span class="s2">in </span><span class="s1">_compression_to_extension:</span>
+        <span class="s2">return </span><span class="s1">compression</span>
+
+    <span class="s1">msg = </span><span class="s3">f&quot;Unrecognized compression type: </span><span class="s2">{</span><span class="s1">compression</span><span class="s2">}</span><span class="s3">&quot;</span>
+    <span class="s1">valid = [</span><span class="s3">&quot;infer&quot;</span><span class="s2">, None</span><span class="s1">] + sorted(_compression_to_extension)</span>
+    <span class="s1">msg += </span><span class="s3">f&quot;</span><span class="s2">\n</span><span class="s3">Valid compression types are </span><span class="s2">{</span><span class="s1">valid</span><span class="s2">}</span><span class="s3">&quot;</span>
+    <span class="s2">raise </span><span class="s1">ValueError(msg)</span>
+
+
+<span class="s2">def </span><span class="s1">get_handle(</span>
+    <span class="s1">path_or_buf: FilePathOrBuffer</span><span class="s2">,</span>
+    <span class="s1">mode: str</span><span class="s2">,</span>
+    <span class="s1">encoding: Optional[str] = </span><span class="s2">None,</span>
+    <span class="s1">compression: CompressionOptions = </span><span class="s2">None,</span>
+    <span class="s1">memory_map: bool = </span><span class="s2">False,</span>
+    <span class="s1">is_text: bool = </span><span class="s2">True,</span>
+    <span class="s1">errors: Optional[str] = </span><span class="s2">None,</span>
+    <span class="s1">storage_options: StorageOptions = </span><span class="s2">None,</span>
+<span class="s1">) -&gt; IOHandles:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Get file handle for given path/buffer and mode. 
+ 
+    Parameters 
+    ---------- 
+    path_or_buf : str or file handle 
+        File path or object. 
+    mode : str 
+        Mode to open path_or_buf with. 
+    encoding : str or None 
+        Encoding to use. 
+    compression : str or dict, default None 
+        If string, specifies compression mode. If dict, value at key 'method' 
+        specifies compression mode. Compression mode must be one of {'infer', 
+        'gzip', 'bz2', 'zip', 'xz', None}. If compression mode is 'infer' 
+        and `filepath_or_buffer` is path-like, then detect compression from 
+        the following extensions: '.gz', '.bz2', '.zip', or '.xz' (otherwise 
+        no compression). If dict and compression mode is one of 
+        {'zip', 'gzip', 'bz2'}, or inferred as one of the above, 
+        other entries passed as additional compression options. 
+ 
+        .. versionchanged:: 1.0.0 
+ 
+           May now be a dict with key 'method' as compression mode 
+           and other keys as compression options if compression 
+           mode is 'zip'. 
+ 
+        .. versionchanged:: 1.1.0 
+ 
+           Passing compression options as keys in dict is now 
+           supported for compression modes 'gzip' and 'bz2' as well as 'zip'. 
+ 
+    memory_map : boolean, default False 
+        See parsers._parser_params for more information. 
+    is_text : boolean, default True 
+        Whether the type of the content passed to the file/buffer is string or 
+        bytes. This is not the same as `&quot;b&quot; not in mode`. If a string content is 
+        passed to a binary file/buffer, a wrapper is inserted. 
+    errors : str, default 'strict' 
+        Specifies how encoding and decoding errors are to be handled. 
+        See the errors argument for :func:`open` for a full list 
+        of options. 
+    storage_options: StorageOptions = None 
+        Passed to _get_filepath_or_buffer 
+ 
+    .. versionchanged:: 1.2.0 
+ 
+    Returns the dataclass IOHandles 
+    &quot;&quot;&quot;</span>
+    <span class="s4"># Windows does not default to utf-8. Set to utf-8 for a consistent behavior</span>
+    <span class="s1">encoding_passed</span><span class="s2">, </span><span class="s1">encoding = encoding</span><span class="s2">, </span><span class="s1">encoding </span><span class="s2">or </span><span class="s3">&quot;utf-8&quot;</span>
+
+    <span class="s4"># read_csv does not know whether the buffer is opened in binary/text mode</span>
+    <span class="s2">if </span><span class="s1">_is_binary_mode(path_or_buf</span><span class="s2">, </span><span class="s1">mode) </span><span class="s2">and </span><span class="s3">&quot;b&quot; </span><span class="s2">not in </span><span class="s1">mode:</span>
+        <span class="s1">mode += </span><span class="s3">&quot;b&quot;</span>
+
+    <span class="s4"># open URLs</span>
+    <span class="s1">ioargs = _get_filepath_or_buffer(</span>
+        <span class="s1">path_or_buf</span><span class="s2">,</span>
+        <span class="s1">encoding=encoding</span><span class="s2">,</span>
+        <span class="s1">compression=compression</span><span class="s2">,</span>
+        <span class="s1">mode=mode</span><span class="s2">,</span>
+        <span class="s1">storage_options=storage_options</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+    <span class="s1">handle = ioargs.filepath_or_buffer</span>
+    <span class="s1">handles: List[Buffer]</span>
+
+    <span class="s4"># memory mapping needs to be the first step</span>
+    <span class="s1">handle</span><span class="s2">, </span><span class="s1">memory_map</span><span class="s2">, </span><span class="s1">handles = _maybe_memory_map(</span>
+        <span class="s1">handle</span><span class="s2">, </span><span class="s1">memory_map</span><span class="s2">, </span><span class="s1">ioargs.encoding</span><span class="s2">, </span><span class="s1">ioargs.mode</span><span class="s2">, </span><span class="s1">errors</span>
+    <span class="s1">)</span>
+
+    <span class="s1">is_path = isinstance(handle</span><span class="s2">, </span><span class="s1">str)</span>
+    <span class="s1">compression_args = dict(ioargs.compression)</span>
+    <span class="s1">compression = compression_args.pop(</span><span class="s3">&quot;method&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">compression:</span>
+        <span class="s4"># compression libraries do not like an explicit text-mode</span>
+        <span class="s1">ioargs.mode = ioargs.mode.replace(</span><span class="s3">&quot;t&quot;</span><span class="s2">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+
+        <span class="s4"># GZ Compression</span>
+        <span class="s2">if </span><span class="s1">compression == </span><span class="s3">&quot;gzip&quot;</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">is_path:</span>
+                <span class="s2">assert </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">str)</span>
+                <span class="s1">handle = gzip.GzipFile(</span>
+                    <span class="s1">filename=handle</span><span class="s2">,</span>
+                    <span class="s1">mode=ioargs.mode</span><span class="s2">,</span>
+                    <span class="s1">**compression_args</span><span class="s2">,</span>
+                <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">handle = gzip.GzipFile(</span>
+                    <span class="s1">fileobj=handle</span><span class="s2">,  </span><span class="s4"># type: ignore[arg-type]</span>
+                    <span class="s1">mode=ioargs.mode</span><span class="s2">,</span>
+                    <span class="s1">**compression_args</span><span class="s2">,</span>
+                <span class="s1">)</span>
+
+        <span class="s4"># BZ Compression</span>
+        <span class="s2">elif </span><span class="s1">compression == </span><span class="s3">&quot;bz2&quot;</span><span class="s1">:</span>
+            <span class="s1">handle = bz2.BZ2File(</span>
+                <span class="s1">handle</span><span class="s2">,  </span><span class="s4"># type: ignore[arg-type]</span>
+                <span class="s1">mode=ioargs.mode</span><span class="s2">,</span>
+                <span class="s1">**compression_args</span><span class="s2">,</span>
+            <span class="s1">)</span>
+
+        <span class="s4"># ZIP Compression</span>
+        <span class="s2">elif </span><span class="s1">compression == </span><span class="s3">&quot;zip&quot;</span><span class="s1">:</span>
+            <span class="s1">handle = _BytesZipFile(handle</span><span class="s2">, </span><span class="s1">ioargs.mode</span><span class="s2">, </span><span class="s1">**compression_args)</span>
+            <span class="s2">if </span><span class="s1">handle.mode == </span><span class="s3">&quot;r&quot;</span><span class="s1">:</span>
+                <span class="s1">handles.append(handle)</span>
+                <span class="s1">zip_names = handle.namelist()</span>
+                <span class="s2">if </span><span class="s1">len(zip_names) == </span><span class="s5">1</span><span class="s1">:</span>
+                    <span class="s1">handle = handle.open(zip_names.pop())</span>
+                <span class="s2">elif </span><span class="s1">len(zip_names) == </span><span class="s5">0</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">f&quot;Zero files found in ZIP file </span><span class="s2">{</span><span class="s1">path_or_buf</span><span class="s2">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">ValueError(</span>
+                        <span class="s3">&quot;Multiple files found in ZIP file. &quot;</span>
+                        <span class="s3">f&quot;Only one file per ZIP: </span><span class="s2">{</span><span class="s1">zip_names</span><span class="s2">}</span><span class="s3">&quot;</span>
+                    <span class="s1">)</span>
+
+        <span class="s4"># XZ Compression</span>
+        <span class="s2">elif </span><span class="s1">compression == </span><span class="s3">&quot;xz&quot;</span><span class="s1">:</span>
+            <span class="s1">handle = get_lzma_file(lzma)(handle</span><span class="s2">, </span><span class="s1">ioargs.mode)</span>
+
+        <span class="s4"># Unrecognized Compression</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">msg = </span><span class="s3">f&quot;Unrecognized compression type: </span><span class="s2">{</span><span class="s1">compression</span><span class="s2">}</span><span class="s3">&quot;</span>
+            <span class="s2">raise </span><span class="s1">ValueError(msg)</span>
+
+        <span class="s2">assert not </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">str)</span>
+        <span class="s1">handles.append(handle)</span>
+
+    <span class="s2">elif </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">str):</span>
+        <span class="s4"># Check whether the filename is to be opened in binary mode.</span>
+        <span class="s4"># Binary mode does not support 'encoding' and 'newline'.</span>
+        <span class="s2">if </span><span class="s1">ioargs.encoding </span><span class="s2">and </span><span class="s3">&quot;b&quot; </span><span class="s2">not in </span><span class="s1">ioargs.mode:</span>
+            <span class="s2">if </span><span class="s1">errors </span><span class="s2">is None and </span><span class="s1">encoding_passed </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s4"># ignore errors when no encoding is specified</span>
+                <span class="s1">errors = </span><span class="s3">&quot;replace&quot;</span>
+            <span class="s4"># Encoding</span>
+            <span class="s1">handle = open(</span>
+                <span class="s1">handle</span><span class="s2">,</span>
+                <span class="s1">ioargs.mode</span><span class="s2">,</span>
+                <span class="s1">encoding=ioargs.encoding</span><span class="s2">,</span>
+                <span class="s1">errors=errors</span><span class="s2">,</span>
+                <span class="s1">newline=</span><span class="s3">&quot;&quot;</span><span class="s2">,</span>
+            <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s4"># Binary mode</span>
+            <span class="s1">handle = open(handle</span><span class="s2">, </span><span class="s1">ioargs.mode)</span>
+        <span class="s1">handles.append(handle)</span>
+
+    <span class="s4"># Convert BytesIO or file objects passed with an encoding</span>
+    <span class="s1">is_wrapped = </span><span class="s2">False</span>
+    <span class="s2">if </span><span class="s1">is_text </span><span class="s2">and </span><span class="s1">(compression </span><span class="s2">or </span><span class="s1">_is_binary_mode(handle</span><span class="s2">, </span><span class="s1">ioargs.mode)):</span>
+        <span class="s1">handle = TextIOWrapper(</span>
+            <span class="s1">handle</span><span class="s2">,  </span><span class="s4"># type: ignore[arg-type]</span>
+            <span class="s1">encoding=ioargs.encoding</span><span class="s2">,</span>
+            <span class="s1">errors=errors</span><span class="s2">,</span>
+            <span class="s1">newline=</span><span class="s3">&quot;&quot;</span><span class="s2">,</span>
+        <span class="s1">)</span>
+        <span class="s1">handles.append(handle)</span>
+        <span class="s4"># only marked as wrapped when the caller provided a handle</span>
+        <span class="s1">is_wrapped = </span><span class="s2">not </span><span class="s1">(</span>
+            <span class="s1">isinstance(ioargs.filepath_or_buffer</span><span class="s2">, </span><span class="s1">str) </span><span class="s2">or </span><span class="s1">ioargs.should_close</span>
+        <span class="s1">)</span>
+
+    <span class="s1">handles.reverse()  </span><span class="s4"># close the most recently added buffer first</span>
+    <span class="s2">if </span><span class="s1">ioargs.should_close:</span>
+        <span class="s2">assert not </span><span class="s1">isinstance(ioargs.filepath_or_buffer</span><span class="s2">, </span><span class="s1">str)</span>
+        <span class="s1">handles.append(ioargs.filepath_or_buffer)</span>
+
+    <span class="s2">assert not </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">str)</span>
+    <span class="s2">return </span><span class="s1">IOHandles(</span>
+        <span class="s1">handle=handle</span><span class="s2">,</span>
+        <span class="s1">created_handles=handles</span><span class="s2">,</span>
+        <span class="s1">is_wrapped=is_wrapped</span><span class="s2">,</span>
+        <span class="s1">is_mmap=memory_map</span><span class="s2">,</span>
+        <span class="s1">compression=ioargs.compression</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s4"># error: Definition of &quot;__exit__&quot; in base class &quot;ZipFile&quot; is incompatible with</span>
+<span class="s4"># definition in base class &quot;BytesIO&quot;  [misc]</span>
+<span class="s4"># error: Definition of &quot;__enter__&quot; in base class &quot;ZipFile&quot; is incompatible with</span>
+<span class="s4"># definition in base class &quot;BytesIO&quot;  [misc]</span>
+<span class="s4"># error: Definition of &quot;__enter__&quot; in base class &quot;ZipFile&quot; is incompatible with</span>
+<span class="s4"># definition in base class &quot;BinaryIO&quot;  [misc]</span>
+<span class="s4"># error: Definition of &quot;__enter__&quot; in base class &quot;ZipFile&quot; is incompatible with</span>
+<span class="s4"># definition in base class &quot;IO&quot;  [misc]</span>
+<span class="s4"># error: Definition of &quot;read&quot; in base class &quot;ZipFile&quot; is incompatible with</span>
+<span class="s4"># definition in base class &quot;BytesIO&quot;  [misc]</span>
+<span class="s4"># error: Definition of &quot;read&quot; in base class &quot;ZipFile&quot; is incompatible with</span>
+<span class="s4"># definition in base class &quot;IO&quot;  [misc]</span>
+<span class="s2">class </span><span class="s1">_BytesZipFile(zipfile.ZipFile</span><span class="s2">, </span><span class="s1">BytesIO):  </span><span class="s4"># type: ignore[misc]</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Wrapper for standard library class ZipFile and allow the returned file-like 
+    handle to accept byte strings via `write` method. 
+ 
+    BytesIO provides attributes of file-like object and ZipFile.writestr writes 
+    bytes strings into a member of the archive. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s4"># GH 17778</span>
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self</span><span class="s2">,</span>
+        <span class="s1">file: FilePathOrBuffer</span><span class="s2">,</span>
+        <span class="s1">mode: str</span><span class="s2">,</span>
+        <span class="s1">archive_name: Optional[str] = </span><span class="s2">None,</span>
+        <span class="s1">**kwargs</span><span class="s2">,</span>
+    <span class="s1">):</span>
+        <span class="s1">mode = mode.replace(</span><span class="s3">&quot;b&quot;</span><span class="s2">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">self.archive_name = archive_name</span>
+        <span class="s1">self.multiple_write_buffer: Optional[Union[StringIO</span><span class="s2">, </span><span class="s1">BytesIO]] = </span><span class="s2">None</span>
+
+        <span class="s1">kwargs_zip: Dict[str</span><span class="s2">, </span><span class="s1">Any] = {</span><span class="s3">&quot;compression&quot;</span><span class="s1">: zipfile.ZIP_DEFLATED}</span>
+        <span class="s1">kwargs_zip.update(kwargs)</span>
+
+        <span class="s1">super().__init__(file</span><span class="s2">, </span><span class="s1">mode</span><span class="s2">, </span><span class="s1">**kwargs_zip)  </span><span class="s4"># type: ignore[arg-type]</span>
+
+    <span class="s2">def </span><span class="s1">write(self</span><span class="s2">, </span><span class="s1">data):</span>
+        <span class="s4"># buffer multiple write calls, write on flush</span>
+        <span class="s2">if </span><span class="s1">self.multiple_write_buffer </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.multiple_write_buffer = (</span>
+                <span class="s1">BytesIO() </span><span class="s2">if </span><span class="s1">isinstance(data</span><span class="s2">, </span><span class="s1">bytes) </span><span class="s2">else </span><span class="s1">StringIO()</span>
+            <span class="s1">)</span>
+        <span class="s1">self.multiple_write_buffer.write(data)</span>
+
+    <span class="s2">def </span><span class="s1">flush(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s4"># write to actual handle and close write buffer</span>
+        <span class="s2">if </span><span class="s1">self.multiple_write_buffer </span><span class="s2">is None or </span><span class="s1">self.multiple_write_buffer.closed:</span>
+            <span class="s2">return</span>
+
+        <span class="s4"># ZipFile needs a non-empty string</span>
+        <span class="s1">archive_name = self.archive_name </span><span class="s2">or </span><span class="s1">self.filename </span><span class="s2">or </span><span class="s3">&quot;zip&quot;</span>
+        <span class="s2">with </span><span class="s1">self.multiple_write_buffer:</span>
+            <span class="s1">super().writestr(archive_name</span><span class="s2">, </span><span class="s1">self.multiple_write_buffer.getvalue())</span>
+
+    <span class="s2">def </span><span class="s1">close(self):</span>
+        <span class="s1">self.flush()</span>
+        <span class="s1">super().close()</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">closed(self):</span>
+        <span class="s2">return </span><span class="s1">self.fp </span><span class="s2">is None</span>
+
+
+<span class="s2">class </span><span class="s1">_MMapWrapper(abc.Iterator):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Wrapper for the Python's mmap class so that it can be properly read in 
+    by Python's csv.reader class. 
+ 
+    Parameters 
+    ---------- 
+    f : file object 
+        File object to be mapped onto memory. Must support the 'fileno' 
+        method or have an equivalent attribute 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">f: IO):</span>
+        <span class="s1">self.attributes = {}</span>
+        <span class="s2">for </span><span class="s1">attribute </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;seekable&quot;</span><span class="s2">, </span><span class="s3">&quot;readable&quot;</span><span class="s2">, </span><span class="s3">&quot;writeable&quot;</span><span class="s1">):</span>
+            <span class="s2">if not </span><span class="s1">hasattr(f</span><span class="s2">, </span><span class="s1">attribute):</span>
+                <span class="s2">continue</span>
+            <span class="s1">self.attributes[attribute] = getattr(f</span><span class="s2">, </span><span class="s1">attribute)()</span>
+        <span class="s1">self.mmap = mmap.mmap(f.fileno()</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s1">access=mmap.ACCESS_READ)</span>
+
+    <span class="s2">def </span><span class="s1">__getattr__(self</span><span class="s2">, </span><span class="s1">name: str):</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.attributes:</span>
+            <span class="s2">return lambda</span><span class="s1">: self.attributes[name]</span>
+        <span class="s2">return </span><span class="s1">getattr(self.mmap</span><span class="s2">, </span><span class="s1">name)</span>
+
+    <span class="s2">def </span><span class="s1">__iter__(self) -&gt; </span><span class="s3">&quot;_MMapWrapper&quot;</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">__next__(self) -&gt; str:</span>
+        <span class="s1">newbytes = self.mmap.readline()</span>
+
+        <span class="s4"># readline returns bytes, not str, but Python's CSV reader</span>
+        <span class="s4"># expects str, so convert the output to str before continuing</span>
+        <span class="s1">newline = newbytes.decode(</span><span class="s3">&quot;utf-8&quot;</span><span class="s1">)</span>
+
+        <span class="s4"># mmap doesn't raise if reading past the allocated</span>
+        <span class="s4"># data but instead returns an empty string, so raise</span>
+        <span class="s4"># if that is returned</span>
+        <span class="s2">if </span><span class="s1">newline == </span><span class="s3">&quot;&quot;</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">StopIteration</span>
+        <span class="s2">return </span><span class="s1">newline</span>
+
+
+<span class="s2">def </span><span class="s1">_maybe_memory_map(</span>
+    <span class="s1">handle: FileOrBuffer</span><span class="s2">,</span>
+    <span class="s1">memory_map: bool</span><span class="s2">,</span>
+    <span class="s1">encoding: str</span><span class="s2">,</span>
+    <span class="s1">mode: str</span><span class="s2">,</span>
+    <span class="s1">errors: Optional[str]</span><span class="s2">,</span>
+<span class="s1">) -&gt; Tuple[FileOrBuffer</span><span class="s2">, </span><span class="s1">bool</span><span class="s2">, </span><span class="s1">List[Buffer]]:</span>
+    <span class="s0">&quot;&quot;&quot;Try to memory map file/buffer.&quot;&quot;&quot;</span>
+    <span class="s1">handles: List[Buffer] = []</span>
+    <span class="s1">memory_map &amp;= hasattr(handle</span><span class="s2">, </span><span class="s3">&quot;fileno&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">str)</span>
+    <span class="s2">if not </span><span class="s1">memory_map:</span>
+        <span class="s2">return </span><span class="s1">handle</span><span class="s2">, </span><span class="s1">memory_map</span><span class="s2">, </span><span class="s1">handles</span>
+
+    <span class="s4"># need to open the file first</span>
+    <span class="s2">if </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">str):</span>
+        <span class="s2">if </span><span class="s1">encoding </span><span class="s2">and </span><span class="s3">&quot;b&quot; </span><span class="s2">not in </span><span class="s1">mode:</span>
+            <span class="s4"># Encoding</span>
+            <span class="s1">handle = open(handle</span><span class="s2">, </span><span class="s1">mode</span><span class="s2">, </span><span class="s1">encoding=encoding</span><span class="s2">, </span><span class="s1">errors=errors</span><span class="s2">, </span><span class="s1">newline=</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s4"># Binary mode</span>
+            <span class="s1">handle = open(handle</span><span class="s2">, </span><span class="s1">mode)</span>
+        <span class="s1">handles.append(handle)</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">wrapped = cast(mmap.mmap</span><span class="s2">, </span><span class="s1">_MMapWrapper(handle))  </span><span class="s4"># type: ignore[arg-type]</span>
+        <span class="s1">handle.close()</span>
+        <span class="s1">handles.remove(handle)</span>
+        <span class="s1">handles.append(wrapped)</span>
+        <span class="s1">handle = wrapped</span>
+    <span class="s2">except </span><span class="s1">Exception:</span>
+        <span class="s4"># we catch any errors that may have occurred</span>
+        <span class="s4"># because that is consistent with the lower-level</span>
+        <span class="s4"># functionality of the C engine (pd.read_csv), so</span>
+        <span class="s4"># leave the file handler as is then</span>
+        <span class="s1">memory_map = </span><span class="s2">False</span>
+
+    <span class="s2">return </span><span class="s1">handle</span><span class="s2">, </span><span class="s1">memory_map</span><span class="s2">, </span><span class="s1">handles</span>
+
+
+<span class="s2">def </span><span class="s1">file_exists(filepath_or_buffer: FilePathOrBuffer) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Test whether file exists.&quot;&quot;&quot;</span>
+    <span class="s1">exists = </span><span class="s2">False</span>
+    <span class="s1">filepath_or_buffer = stringify_path(filepath_or_buffer)</span>
+    <span class="s2">if not </span><span class="s1">isinstance(filepath_or_buffer</span><span class="s2">, </span><span class="s1">str):</span>
+        <span class="s2">return </span><span class="s1">exists</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">exists = os.path.exists(filepath_or_buffer)</span>
+        <span class="s4"># gh-5874: if the filepath is too long will raise here</span>
+    <span class="s2">except </span><span class="s1">(TypeError</span><span class="s2">, </span><span class="s1">ValueError):</span>
+        <span class="s2">pass</span>
+    <span class="s2">return </span><span class="s1">exists</span>
+
+
+<span class="s2">def </span><span class="s1">_is_binary_mode(handle: FilePathOrBuffer</span><span class="s2">, </span><span class="s1">mode: str) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Whether the handle is opened in binary mode&quot;&quot;&quot;</span>
+    <span class="s4"># specified by user</span>
+    <span class="s2">if </span><span class="s3">&quot;t&quot; </span><span class="s2">in </span><span class="s1">mode </span><span class="s2">or </span><span class="s3">&quot;b&quot; </span><span class="s2">in </span><span class="s1">mode:</span>
+        <span class="s2">return </span><span class="s3">&quot;b&quot; </span><span class="s2">in </span><span class="s1">mode</span>
+
+    <span class="s4"># classes that expect string but have 'b' in mode</span>
+    <span class="s1">text_classes = (codecs.StreamWriter</span><span class="s2">, </span><span class="s1">codecs.StreamReader</span><span class="s2">, </span><span class="s1">codecs.StreamReaderWriter)</span>
+    <span class="s2">if </span><span class="s1">issubclass(type(handle)</span><span class="s2">, </span><span class="s1">text_classes):</span>
+        <span class="s2">return False</span>
+
+    <span class="s4"># classes that expect bytes</span>
+    <span class="s1">binary_classes = (BufferedIOBase</span><span class="s2">, </span><span class="s1">RawIOBase)</span>
+    <span class="s2">return </span><span class="s1">isinstance(handle</span><span class="s2">, </span><span class="s1">binary_classes) </span><span class="s2">or </span><span class="s3">&quot;b&quot; </span><span class="s2">in </span><span class="s1">getattr(handle</span><span class="s2">, </span><span class="s3">&quot;mode&quot;</span><span class="s2">, </span><span class="s1">mode)</span>
+</pre>
+</body>
+</html>

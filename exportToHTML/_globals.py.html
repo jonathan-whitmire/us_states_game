@@ -1,0 +1,100 @@
+<html>
+<head>
+<title>_globals.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #cc7832;}
+.s4 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_globals.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Module defining global singleton classes. 
+ 
+This module raises a RuntimeError if an attempt to reload it is made. In that 
+way the identities of the classes defined here are fixed and will remain so 
+even if numpy itself is reloaded. In particular, a function like the following 
+will still work correctly after numpy is reloaded:: 
+ 
+    def foo(arg=np._NoValue): 
+        if arg is np._NoValue: 
+            ... 
+ 
+That was not the case when the singleton classes were defined in the numpy 
+``__init__.py`` file. See gh-7844 for a discussion of the reload problem that 
+motivated this module. 
+ 
+&quot;&quot;&quot;</span>
+<span class="s1">__ALL__ = [</span>
+    <span class="s2">'ModuleDeprecationWarning'</span><span class="s3">, </span><span class="s2">'VisibleDeprecationWarning'</span><span class="s3">, </span><span class="s2">'_NoValue'</span>
+    <span class="s1">]</span>
+
+
+<span class="s4"># Disallow reloading this module so as to preserve the identities of the</span>
+<span class="s4"># classes defined here.</span>
+<span class="s3">if </span><span class="s2">'_is_loaded' </span><span class="s3">in </span><span class="s1">globals():</span>
+    <span class="s3">raise </span><span class="s1">RuntimeError(</span><span class="s2">'Reloading numpy._globals is not allowed'</span><span class="s1">)</span>
+<span class="s1">_is_loaded = </span><span class="s3">True</span>
+
+
+<span class="s3">class </span><span class="s1">ModuleDeprecationWarning(DeprecationWarning):</span>
+    <span class="s0">&quot;&quot;&quot;Module deprecation warning. 
+ 
+    The nose tester turns ordinary Deprecation warnings into test failures. 
+    That makes it hard to deprecate whole modules, because they get 
+    imported by default. So this is a special Deprecation warning that the 
+    nose tester will let pass without making tests fail. 
+ 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s1">ModuleDeprecationWarning.__module__ = </span><span class="s2">'numpy'</span>
+
+
+<span class="s3">class </span><span class="s1">VisibleDeprecationWarning(UserWarning):</span>
+    <span class="s0">&quot;&quot;&quot;Visible deprecation warning. 
+ 
+    By default, python will not show deprecation warnings, so this class 
+    can be used when a very visible warning is helpful, for example because 
+    the usage is most likely a user bug. 
+ 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s1">VisibleDeprecationWarning.__module__ = </span><span class="s2">'numpy'</span>
+
+
+<span class="s3">class </span><span class="s1">_NoValueType:</span>
+    <span class="s0">&quot;&quot;&quot;Special keyword value. 
+ 
+    The instance of this class may be used as the default value assigned to a 
+    deprecated keyword in order to check if it has been given a user defined 
+    value. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__instance = </span><span class="s3">None</span>
+    <span class="s3">def </span><span class="s1">__new__(cls):</span>
+        <span class="s4"># ensure that only one instance exists</span>
+        <span class="s3">if not </span><span class="s1">cls.__instance:</span>
+            <span class="s1">cls.__instance = super(_NoValueType</span><span class="s3">, </span><span class="s1">cls).__new__(cls)</span>
+        <span class="s3">return </span><span class="s1">cls.__instance</span>
+
+    <span class="s4"># needed for python 2 to preserve identity through a pickle</span>
+    <span class="s3">def </span><span class="s1">__reduce__(self):</span>
+        <span class="s3">return </span><span class="s1">(self.__class__</span><span class="s3">, </span><span class="s1">())</span>
+
+    <span class="s3">def </span><span class="s1">__repr__(self):</span>
+        <span class="s3">return </span><span class="s2">&quot;&lt;no value&gt;&quot;</span>
+
+
+<span class="s1">_NoValue = _NoValueType()</span>
+</pre>
+</body>
+</html>

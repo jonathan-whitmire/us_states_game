@@ -1,0 +1,1123 @@
+<html>
+<head>
+<title>html.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #808080;}
+.s4 { color: #6a8759;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+html.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+:mod:`pandas.io.html` is a module containing functionality for dealing with 
+HTML IO. 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">abc</span>
+<span class="s2">import </span><span class="s1">numbers</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict</span><span class="s2">, </span><span class="s1">List</span><span class="s2">, </span><span class="s1">Optional</span><span class="s2">, </span><span class="s1">Pattern</span><span class="s2">, </span><span class="s1">Sequence</span><span class="s2">, </span><span class="s1">Tuple</span><span class="s2">, </span><span class="s1">Union</span>
+
+<span class="s2">from </span><span class="s1">pandas._typing </span><span class="s2">import </span><span class="s1">FilePathOrBuffer</span>
+<span class="s2">from </span><span class="s1">pandas.compat._optional </span><span class="s2">import </span><span class="s1">import_optional_dependency</span>
+<span class="s2">from </span><span class="s1">pandas.errors </span><span class="s2">import </span><span class="s1">AbstractMethodError</span><span class="s2">, </span><span class="s1">EmptyDataError</span>
+<span class="s2">from </span><span class="s1">pandas.util._decorators </span><span class="s2">import </span><span class="s1">deprecate_nonkeyword_arguments</span>
+
+<span class="s2">from </span><span class="s1">pandas.core.dtypes.common </span><span class="s2">import </span><span class="s1">is_list_like</span>
+
+<span class="s2">from </span><span class="s1">pandas.core.construction </span><span class="s2">import </span><span class="s1">create_series_with_explicit_dtype</span>
+<span class="s2">from </span><span class="s1">pandas.core.frame </span><span class="s2">import </span><span class="s1">DataFrame</span>
+
+<span class="s2">from </span><span class="s1">pandas.io.common </span><span class="s2">import </span><span class="s1">is_url</span><span class="s2">, </span><span class="s1">stringify_path</span><span class="s2">, </span><span class="s1">urlopen</span><span class="s2">, </span><span class="s1">validate_header_arg</span>
+<span class="s2">from </span><span class="s1">pandas.io.formats.printing </span><span class="s2">import </span><span class="s1">pprint_thing</span>
+<span class="s2">from </span><span class="s1">pandas.io.parsers </span><span class="s2">import </span><span class="s1">TextParser</span>
+
+<span class="s1">_IMPORTS = </span><span class="s2">False</span>
+<span class="s1">_HAS_BS4 = </span><span class="s2">False</span>
+<span class="s1">_HAS_LXML = </span><span class="s2">False</span>
+<span class="s1">_HAS_HTML5LIB = </span><span class="s2">False</span>
+
+
+<span class="s2">def </span><span class="s1">_importers():</span>
+    <span class="s3"># import things we need</span>
+    <span class="s3"># but make this done on a first use basis</span>
+
+    <span class="s2">global </span><span class="s1">_IMPORTS</span>
+    <span class="s2">if </span><span class="s1">_IMPORTS:</span>
+        <span class="s2">return</span>
+
+    <span class="s2">global </span><span class="s1">_HAS_BS4</span><span class="s2">, </span><span class="s1">_HAS_LXML</span><span class="s2">, </span><span class="s1">_HAS_HTML5LIB</span>
+    <span class="s1">bs4 = import_optional_dependency(</span><span class="s4">&quot;bs4&quot;</span><span class="s2">, </span><span class="s1">raise_on_missing=</span><span class="s2">False, </span><span class="s1">on_version=</span><span class="s4">&quot;ignore&quot;</span><span class="s1">)</span>
+    <span class="s1">_HAS_BS4 = bs4 </span><span class="s2">is not None</span>
+
+    <span class="s1">lxml = import_optional_dependency(</span>
+        <span class="s4">&quot;lxml.etree&quot;</span><span class="s2">, </span><span class="s1">raise_on_missing=</span><span class="s2">False, </span><span class="s1">on_version=</span><span class="s4">&quot;ignore&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">_HAS_LXML = lxml </span><span class="s2">is not None</span>
+
+    <span class="s1">html5lib = import_optional_dependency(</span>
+        <span class="s4">&quot;html5lib&quot;</span><span class="s2">, </span><span class="s1">raise_on_missing=</span><span class="s2">False, </span><span class="s1">on_version=</span><span class="s4">&quot;ignore&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">_HAS_HTML5LIB = html5lib </span><span class="s2">is not None</span>
+
+    <span class="s1">_IMPORTS = </span><span class="s2">True</span>
+
+
+<span class="s3">#############</span>
+<span class="s3"># READ HTML #</span>
+<span class="s3">#############</span>
+<span class="s1">_RE_WHITESPACE = re.compile(</span><span class="s4">r&quot;[\r\n]+|\s{2,}&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_remove_whitespace(s: str</span><span class="s2">, </span><span class="s1">regex=_RE_WHITESPACE) -&gt; str:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Replace extra whitespace inside of a string with a single space. 
+ 
+    Parameters 
+    ---------- 
+    s : str or unicode 
+        The string from which to remove extra whitespace. 
+    regex : re.Pattern 
+        The regular expression to use to remove extra whitespace. 
+ 
+    Returns 
+    ------- 
+    subd : str or unicode 
+        `s` with all extra whitespace replaced with a single space. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">regex.sub(</span><span class="s4">&quot; &quot;</span><span class="s2">, </span><span class="s1">s.strip())</span>
+
+
+<span class="s2">def </span><span class="s1">_get_skiprows(skiprows):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Get an iterator given an integer, slice or container. 
+ 
+    Parameters 
+    ---------- 
+    skiprows : int, slice, container 
+        The iterator to use to skip rows; can also be a slice. 
+ 
+    Raises 
+    ------ 
+    TypeError 
+        * If `skiprows` is not a slice, integer, or Container 
+ 
+    Returns 
+    ------- 
+    it : iterable 
+        A proper iterator to use to skip rows of a DataFrame. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(skiprows</span><span class="s2">, </span><span class="s1">slice):</span>
+        <span class="s1">start</span><span class="s2">, </span><span class="s1">step = skiprows.start </span><span class="s2">or </span><span class="s5">0</span><span class="s2">, </span><span class="s1">skiprows.step </span><span class="s2">or </span><span class="s5">1</span>
+        <span class="s2">return </span><span class="s1">list(range(start</span><span class="s2">, </span><span class="s1">skiprows.stop</span><span class="s2">, </span><span class="s1">step))</span>
+    <span class="s2">elif </span><span class="s1">isinstance(skiprows</span><span class="s2">, </span><span class="s1">numbers.Integral) </span><span class="s2">or </span><span class="s1">is_list_like(skiprows):</span>
+        <span class="s2">return </span><span class="s1">skiprows</span>
+    <span class="s2">elif </span><span class="s1">skiprows </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s5">0</span>
+    <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">type(skiprows).__name__</span><span class="s2">} </span><span class="s4">is not a valid type for skipping rows&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_read(obj):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Try to read from a url, file or string. 
+ 
+    Parameters 
+    ---------- 
+    obj : str, unicode, or file-like 
+ 
+    Returns 
+    ------- 
+    raw_text : str 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">is_url(obj):</span>
+        <span class="s2">with </span><span class="s1">urlopen(obj) </span><span class="s2">as </span><span class="s1">url:</span>
+            <span class="s1">text = url.read()</span>
+    <span class="s2">elif </span><span class="s1">hasattr(obj</span><span class="s2">, </span><span class="s4">&quot;read&quot;</span><span class="s1">):</span>
+        <span class="s1">text = obj.read()</span>
+    <span class="s2">elif </span><span class="s1">isinstance(obj</span><span class="s2">, </span><span class="s1">(str</span><span class="s2">, </span><span class="s1">bytes)):</span>
+        <span class="s1">text = obj</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">os.path.isfile(text):</span>
+                <span class="s2">with </span><span class="s1">open(text</span><span class="s2">, </span><span class="s4">&quot;rb&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+                    <span class="s2">return </span><span class="s1">f.read()</span>
+        <span class="s2">except </span><span class="s1">(TypeError</span><span class="s2">, </span><span class="s1">ValueError):</span>
+            <span class="s2">pass</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s4">f&quot;Cannot read object of type '</span><span class="s2">{</span><span class="s1">type(obj).__name__</span><span class="s2">}</span><span class="s4">'&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">text</span>
+
+
+<span class="s2">class </span><span class="s1">_HtmlFrameParser:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Base class for parsers that parse HTML into DataFrames. 
+ 
+    Parameters 
+    ---------- 
+    io : str or file-like 
+        This can be either a string of raw HTML, a valid URL using the HTTP, 
+        FTP, or FILE protocols or a file-like object. 
+ 
+    match : str or regex 
+        The text to match in the document. 
+ 
+    attrs : dict 
+        List of HTML &lt;table&gt; element attributes to match. 
+ 
+    encoding : str 
+        Encoding to be used by parser 
+ 
+    displayed_only : bool 
+        Whether or not items with &quot;display:none&quot; should be ignored 
+ 
+    Attributes 
+    ---------- 
+    io : str or file-like 
+        raw HTML, URL, or file-like object 
+ 
+    match : regex 
+        The text to match in the raw HTML 
+ 
+    attrs : dict-like 
+        A dictionary of valid table attributes to use to search for table 
+        elements. 
+ 
+    encoding : str 
+        Encoding to be used by parser 
+ 
+    displayed_only : bool 
+        Whether or not items with &quot;display:none&quot; should be ignored 
+ 
+    Notes 
+    ----- 
+    To subclass this class effectively you must override the following methods: 
+        * :func:`_build_doc` 
+        * :func:`_attr_getter` 
+        * :func:`_text_getter` 
+        * :func:`_parse_td` 
+        * :func:`_parse_thead_tr` 
+        * :func:`_parse_tbody_tr` 
+        * :func:`_parse_tfoot_tr` 
+        * :func:`_parse_tables` 
+        * :func:`_equals_tag` 
+    See each method's respective documentation for details on their 
+    functionality. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">io</span><span class="s2">, </span><span class="s1">match</span><span class="s2">, </span><span class="s1">attrs</span><span class="s2">, </span><span class="s1">encoding</span><span class="s2">, </span><span class="s1">displayed_only):</span>
+        <span class="s1">self.io = io</span>
+        <span class="s1">self.match = match</span>
+        <span class="s1">self.attrs = attrs</span>
+        <span class="s1">self.encoding = encoding</span>
+        <span class="s1">self.displayed_only = displayed_only</span>
+
+    <span class="s2">def </span><span class="s1">parse_tables(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Parse and return all tables from the DOM. 
+ 
+        Returns 
+        ------- 
+        list of parsed (header, body, footer) tuples from tables. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">tables = self._parse_tables(self._build_doc()</span><span class="s2">, </span><span class="s1">self.match</span><span class="s2">, </span><span class="s1">self.attrs)</span>
+        <span class="s2">return </span><span class="s1">(self._parse_thead_tbody_tfoot(table) </span><span class="s2">for </span><span class="s1">table </span><span class="s2">in </span><span class="s1">tables)</span>
+
+    <span class="s2">def </span><span class="s1">_attr_getter(self</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">, </span><span class="s1">attr):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the attribute value of an individual DOM node. 
+ 
+        Parameters 
+        ---------- 
+        obj : node-like 
+            A DOM node. 
+ 
+        attr : str or unicode 
+            The attribute, such as &quot;colspan&quot; 
+ 
+        Returns 
+        ------- 
+        str or unicode 
+            The attribute value. 
+        &quot;&quot;&quot;</span>
+        <span class="s3"># Both lxml and BeautifulSoup have the same implementation:</span>
+        <span class="s2">return </span><span class="s1">obj.get(attr)</span>
+
+    <span class="s2">def </span><span class="s1">_text_getter(self</span><span class="s2">, </span><span class="s1">obj):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the text of an individual DOM node. 
+ 
+        Parameters 
+        ---------- 
+        obj : node-like 
+            A DOM node. 
+ 
+        Returns 
+        ------- 
+        text : str or unicode 
+            The text from an individual DOM node. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_td(self</span><span class="s2">, </span><span class="s1">obj):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the td elements from a row element. 
+ 
+        Parameters 
+        ---------- 
+        obj : node-like 
+            A DOM &lt;tr&gt; node. 
+ 
+        Returns 
+        ------- 
+        list of node-like 
+            These are the elements of each row, i.e., the columns. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_thead_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the list of thead row elements from the parsed table element. 
+ 
+        Parameters 
+        ---------- 
+        table : a table element that contains zero or more thead elements. 
+ 
+        Returns 
+        ------- 
+        list of node-like 
+            These are the &lt;tr&gt; row elements of a table. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tbody_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the list of tbody row elements from the parsed table element. 
+ 
+        HTML5 table bodies consist of either 0 or more &lt;tbody&gt; elements (which 
+        only contain &lt;tr&gt; elements) or 0 or more &lt;tr&gt; elements. This method 
+        checks for both structures. 
+ 
+        Parameters 
+        ---------- 
+        table : a table element that contains row elements. 
+ 
+        Returns 
+        ------- 
+        list of node-like 
+            These are the &lt;tr&gt; row elements of a table. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tfoot_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the list of tfoot row elements from the parsed table element. 
+ 
+        Parameters 
+        ---------- 
+        table : a table element that contains row elements. 
+ 
+        Returns 
+        ------- 
+        list of node-like 
+            These are the &lt;tr&gt; row elements of a table. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tables(self</span><span class="s2">, </span><span class="s1">doc</span><span class="s2">, </span><span class="s1">match</span><span class="s2">, </span><span class="s1">attrs):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return all tables from the parsed DOM. 
+ 
+        Parameters 
+        ---------- 
+        doc : the DOM from which to parse the table element. 
+ 
+        match : str or regular expression 
+            The text to search for in the DOM tree. 
+ 
+        attrs : dict 
+            A dictionary of table attributes that can be used to disambiguate 
+            multiple tables on a page. 
+ 
+        Raises 
+        ------ 
+        ValueError : `match` does not match any text in the document. 
+ 
+        Returns 
+        ------- 
+        list of node-like 
+            HTML &lt;table&gt; elements to be parsed into raw data. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_equals_tag(self</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">, </span><span class="s1">tag):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return whether an individual DOM node matches a tag 
+ 
+        Parameters 
+        ---------- 
+        obj : node-like 
+            A DOM node. 
+ 
+        tag : str 
+            Tag name to be checked for equality. 
+ 
+        Returns 
+        ------- 
+        boolean 
+            Whether `obj`'s tag name is `tag` 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_build_doc(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return a tree-like object that can be used to iterate over the DOM. 
+ 
+        Returns 
+        ------- 
+        node-like 
+            The DOM from which to parse the table element. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">AbstractMethodError(self)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_thead_tbody_tfoot(self</span><span class="s2">, </span><span class="s1">table_html):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Given a table, return parsed header, body, and foot. 
+ 
+        Parameters 
+        ---------- 
+        table_html : node-like 
+ 
+        Returns 
+        ------- 
+        tuple of (header, body, footer), each a list of list-of-text rows. 
+ 
+        Notes 
+        ----- 
+        Header and body are lists-of-lists. Top level list is a list of 
+        rows. Each row is a list of str text. 
+ 
+        Logic: Use &lt;thead&gt;, &lt;tbody&gt;, &lt;tfoot&gt; elements to identify 
+               header, body, and footer, otherwise: 
+               - Put all rows into body 
+               - Move rows from top of body to header only if 
+                 all elements inside row are &lt;th&gt; 
+               - Move rows from bottom of body to footer only if 
+                 all elements inside row are &lt;th&gt; 
+        &quot;&quot;&quot;</span>
+        <span class="s1">header_rows = self._parse_thead_tr(table_html)</span>
+        <span class="s1">body_rows = self._parse_tbody_tr(table_html)</span>
+        <span class="s1">footer_rows = self._parse_tfoot_tr(table_html)</span>
+
+        <span class="s2">def </span><span class="s1">row_is_all_th(row):</span>
+            <span class="s2">return </span><span class="s1">all(self._equals_tag(t</span><span class="s2">, </span><span class="s4">&quot;th&quot;</span><span class="s1">) </span><span class="s2">for </span><span class="s1">t </span><span class="s2">in </span><span class="s1">self._parse_td(row))</span>
+
+        <span class="s2">if not </span><span class="s1">header_rows:</span>
+            <span class="s3"># The table has no &lt;thead&gt;. Move the top all-&lt;th&gt; rows from</span>
+            <span class="s3"># body_rows to header_rows. (This is a common case because many</span>
+            <span class="s3"># tables in the wild have no &lt;thead&gt; or &lt;tfoot&gt;</span>
+            <span class="s2">while </span><span class="s1">body_rows </span><span class="s2">and </span><span class="s1">row_is_all_th(body_rows[</span><span class="s5">0</span><span class="s1">]):</span>
+                <span class="s1">header_rows.append(body_rows.pop(</span><span class="s5">0</span><span class="s1">))</span>
+
+        <span class="s1">header = self._expand_colspan_rowspan(header_rows)</span>
+        <span class="s1">body = self._expand_colspan_rowspan(body_rows)</span>
+        <span class="s1">footer = self._expand_colspan_rowspan(footer_rows)</span>
+
+        <span class="s2">return </span><span class="s1">header</span><span class="s2">, </span><span class="s1">body</span><span class="s2">, </span><span class="s1">footer</span>
+
+    <span class="s2">def </span><span class="s1">_expand_colspan_rowspan(self</span><span class="s2">, </span><span class="s1">rows):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Given a list of &lt;tr&gt;s, return a list of text rows. 
+ 
+        Parameters 
+        ---------- 
+        rows : list of node-like 
+            List of &lt;tr&gt;s 
+ 
+        Returns 
+        ------- 
+        list of list 
+            Each returned row is a list of str text. 
+ 
+        Notes 
+        ----- 
+        Any cell with ``rowspan`` or ``colspan`` will have its contents copied 
+        to subsequent cells. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">all_texts = []  </span><span class="s3"># list of rows, each a list of str</span>
+        <span class="s1">remainder: List[Tuple[int</span><span class="s2">, </span><span class="s1">str</span><span class="s2">, </span><span class="s1">int]] = []  </span><span class="s3"># list of (index, text, nrows)</span>
+
+        <span class="s2">for </span><span class="s1">tr </span><span class="s2">in </span><span class="s1">rows:</span>
+            <span class="s1">texts = []  </span><span class="s3"># the output for this row</span>
+            <span class="s1">next_remainder = []</span>
+
+            <span class="s1">index = </span><span class="s5">0</span>
+            <span class="s1">tds = self._parse_td(tr)</span>
+            <span class="s2">for </span><span class="s1">td </span><span class="s2">in </span><span class="s1">tds:</span>
+                <span class="s3"># Append texts from previous rows with rowspan&gt;1 that come</span>
+                <span class="s3"># before this &lt;td&gt;</span>
+                <span class="s2">while </span><span class="s1">remainder </span><span class="s2">and </span><span class="s1">remainder[</span><span class="s5">0</span><span class="s1">][</span><span class="s5">0</span><span class="s1">] &lt;= index:</span>
+                    <span class="s1">prev_i</span><span class="s2">, </span><span class="s1">prev_text</span><span class="s2">, </span><span class="s1">prev_rowspan = remainder.pop(</span><span class="s5">0</span><span class="s1">)</span>
+                    <span class="s1">texts.append(prev_text)</span>
+                    <span class="s2">if </span><span class="s1">prev_rowspan &gt; </span><span class="s5">1</span><span class="s1">:</span>
+                        <span class="s1">next_remainder.append((prev_i</span><span class="s2">, </span><span class="s1">prev_text</span><span class="s2">, </span><span class="s1">prev_rowspan - </span><span class="s5">1</span><span class="s1">))</span>
+                    <span class="s1">index += </span><span class="s5">1</span>
+
+                <span class="s3"># Append the text from this &lt;td&gt;, colspan times</span>
+                <span class="s1">text = _remove_whitespace(self._text_getter(td))</span>
+                <span class="s1">rowspan = int(self._attr_getter(td</span><span class="s2">, </span><span class="s4">&quot;rowspan&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s5">1</span><span class="s1">)</span>
+                <span class="s1">colspan = int(self._attr_getter(td</span><span class="s2">, </span><span class="s4">&quot;colspan&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s5">1</span><span class="s1">)</span>
+
+                <span class="s2">for </span><span class="s1">_ </span><span class="s2">in </span><span class="s1">range(colspan):</span>
+                    <span class="s1">texts.append(text)</span>
+                    <span class="s2">if </span><span class="s1">rowspan &gt; </span><span class="s5">1</span><span class="s1">:</span>
+                        <span class="s1">next_remainder.append((index</span><span class="s2">, </span><span class="s1">text</span><span class="s2">, </span><span class="s1">rowspan - </span><span class="s5">1</span><span class="s1">))</span>
+                    <span class="s1">index += </span><span class="s5">1</span>
+
+            <span class="s3"># Append texts from previous rows at the final position</span>
+            <span class="s2">for </span><span class="s1">prev_i</span><span class="s2">, </span><span class="s1">prev_text</span><span class="s2">, </span><span class="s1">prev_rowspan </span><span class="s2">in </span><span class="s1">remainder:</span>
+                <span class="s1">texts.append(prev_text)</span>
+                <span class="s2">if </span><span class="s1">prev_rowspan &gt; </span><span class="s5">1</span><span class="s1">:</span>
+                    <span class="s1">next_remainder.append((prev_i</span><span class="s2">, </span><span class="s1">prev_text</span><span class="s2">, </span><span class="s1">prev_rowspan - </span><span class="s5">1</span><span class="s1">))</span>
+
+            <span class="s1">all_texts.append(texts)</span>
+            <span class="s1">remainder = next_remainder</span>
+
+        <span class="s3"># Append rows that only appear because the previous row had non-1</span>
+        <span class="s3"># rowspan</span>
+        <span class="s2">while </span><span class="s1">remainder:</span>
+            <span class="s1">next_remainder = []</span>
+            <span class="s1">texts = []</span>
+            <span class="s2">for </span><span class="s1">prev_i</span><span class="s2">, </span><span class="s1">prev_text</span><span class="s2">, </span><span class="s1">prev_rowspan </span><span class="s2">in </span><span class="s1">remainder:</span>
+                <span class="s1">texts.append(prev_text)</span>
+                <span class="s2">if </span><span class="s1">prev_rowspan &gt; </span><span class="s5">1</span><span class="s1">:</span>
+                    <span class="s1">next_remainder.append((prev_i</span><span class="s2">, </span><span class="s1">prev_text</span><span class="s2">, </span><span class="s1">prev_rowspan - </span><span class="s5">1</span><span class="s1">))</span>
+            <span class="s1">all_texts.append(texts)</span>
+            <span class="s1">remainder = next_remainder</span>
+
+        <span class="s2">return </span><span class="s1">all_texts</span>
+
+    <span class="s2">def </span><span class="s1">_handle_hidden_tables(self</span><span class="s2">, </span><span class="s1">tbl_list</span><span class="s2">, </span><span class="s1">attr_name):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return list of tables, potentially removing hidden elements 
+ 
+        Parameters 
+        ---------- 
+        tbl_list : list of node-like 
+            Type of list elements will vary depending upon parser used 
+        attr_name : str 
+            Name of the accessor for retrieving HTML attributes 
+ 
+        Returns 
+        ------- 
+        list of node-like 
+            Return type matches `tbl_list` 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self.displayed_only:</span>
+            <span class="s2">return </span><span class="s1">tbl_list</span>
+
+        <span class="s2">return </span><span class="s1">[</span>
+            <span class="s1">x</span>
+            <span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">tbl_list</span>
+            <span class="s2">if </span><span class="s4">&quot;display:none&quot;</span>
+            <span class="s2">not in </span><span class="s1">getattr(x</span><span class="s2">, </span><span class="s1">attr_name).get(</span><span class="s4">&quot;style&quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s1">).replace(</span><span class="s4">&quot; &quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">]</span>
+
+
+<span class="s2">class </span><span class="s1">_BeautifulSoupHtml5LibFrameParser(_HtmlFrameParser):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    HTML to DataFrame parser that uses BeautifulSoup under the hood. 
+ 
+    See Also 
+    -------- 
+    pandas.io.html._HtmlFrameParser 
+    pandas.io.html._LxmlFrameParser 
+ 
+    Notes 
+    ----- 
+    Documentation strings for this class are in the base class 
+    :class:`pandas.io.html._HtmlFrameParser`. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">*args</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+        <span class="s1">super().__init__(*args</span><span class="s2">, </span><span class="s1">**kwargs)</span>
+        <span class="s2">from </span><span class="s1">bs4 </span><span class="s2">import </span><span class="s1">SoupStrainer</span>
+
+        <span class="s1">self._strainer = SoupStrainer(</span><span class="s4">&quot;table&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tables(self</span><span class="s2">, </span><span class="s1">doc</span><span class="s2">, </span><span class="s1">match</span><span class="s2">, </span><span class="s1">attrs):</span>
+        <span class="s1">element_name = self._strainer.name</span>
+        <span class="s1">tables = doc.find_all(element_name</span><span class="s2">, </span><span class="s1">attrs=attrs)</span>
+
+        <span class="s2">if not </span><span class="s1">tables:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;No tables found&quot;</span><span class="s1">)</span>
+
+        <span class="s1">result = []</span>
+        <span class="s1">unique_tables = set()</span>
+        <span class="s1">tables = self._handle_hidden_tables(tables</span><span class="s2">, </span><span class="s4">&quot;attrs&quot;</span><span class="s1">)</span>
+
+        <span class="s2">for </span><span class="s1">table </span><span class="s2">in </span><span class="s1">tables:</span>
+            <span class="s2">if </span><span class="s1">self.displayed_only:</span>
+                <span class="s2">for </span><span class="s1">elem </span><span class="s2">in </span><span class="s1">table.find_all(style=re.compile(</span><span class="s4">r&quot;display:\s*none&quot;</span><span class="s1">)):</span>
+                    <span class="s1">elem.decompose()</span>
+
+            <span class="s2">if </span><span class="s1">table </span><span class="s2">not in </span><span class="s1">unique_tables </span><span class="s2">and </span><span class="s1">table.find(text=match) </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">result.append(table)</span>
+            <span class="s1">unique_tables.add(table)</span>
+
+        <span class="s2">if not </span><span class="s1">result:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;No tables found matching pattern </span><span class="s2">{</span><span class="s1">repr(match.pattern)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">result</span>
+
+    <span class="s2">def </span><span class="s1">_text_getter(self</span><span class="s2">, </span><span class="s1">obj):</span>
+        <span class="s2">return </span><span class="s1">obj.text</span>
+
+    <span class="s2">def </span><span class="s1">_equals_tag(self</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">, </span><span class="s1">tag):</span>
+        <span class="s2">return </span><span class="s1">obj.name == tag</span>
+
+    <span class="s2">def </span><span class="s1">_parse_td(self</span><span class="s2">, </span><span class="s1">row):</span>
+        <span class="s2">return </span><span class="s1">row.find_all((</span><span class="s4">&quot;td&quot;</span><span class="s2">, </span><span class="s4">&quot;th&quot;</span><span class="s1">)</span><span class="s2">, </span><span class="s1">recursive=</span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_thead_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s2">return </span><span class="s1">table.select(</span><span class="s4">&quot;thead tr&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tbody_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s1">from_tbody = table.select(</span><span class="s4">&quot;tbody tr&quot;</span><span class="s1">)</span>
+        <span class="s1">from_root = table.find_all(</span><span class="s4">&quot;tr&quot;</span><span class="s2">, </span><span class="s1">recursive=</span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s3"># HTML spec: at most one of these lists has content</span>
+        <span class="s2">return </span><span class="s1">from_tbody + from_root</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tfoot_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s2">return </span><span class="s1">table.select(</span><span class="s4">&quot;tfoot tr&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_setup_build_doc(self):</span>
+        <span class="s1">raw_text = _read(self.io)</span>
+        <span class="s2">if not </span><span class="s1">raw_text:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;No text parsed from document: </span><span class="s2">{</span><span class="s1">self.io</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">raw_text</span>
+
+    <span class="s2">def </span><span class="s1">_build_doc(self):</span>
+        <span class="s2">from </span><span class="s1">bs4 </span><span class="s2">import </span><span class="s1">BeautifulSoup</span>
+
+        <span class="s1">bdoc = self._setup_build_doc()</span>
+        <span class="s2">if </span><span class="s1">isinstance(bdoc</span><span class="s2">, </span><span class="s1">bytes) </span><span class="s2">and </span><span class="s1">self.encoding </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">udoc = bdoc.decode(self.encoding)</span>
+            <span class="s1">from_encoding = </span><span class="s2">None</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">udoc = bdoc</span>
+            <span class="s1">from_encoding = self.encoding</span>
+        <span class="s2">return </span><span class="s1">BeautifulSoup(udoc</span><span class="s2">, </span><span class="s1">features=</span><span class="s4">&quot;html5lib&quot;</span><span class="s2">, </span><span class="s1">from_encoding=from_encoding)</span>
+
+
+<span class="s2">def </span><span class="s1">_build_xpath_expr(attrs) -&gt; str:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Build an xpath expression to simulate bs4's ability to pass in kwargs to 
+    search for attributes when using the lxml parser. 
+ 
+    Parameters 
+    ---------- 
+    attrs : dict 
+        A dict of HTML attributes. These are NOT checked for validity. 
+ 
+    Returns 
+    ------- 
+    expr : unicode 
+        An XPath expression that checks for the given HTML attributes. 
+    &quot;&quot;&quot;</span>
+    <span class="s3"># give class attribute as class_ because class is a python keyword</span>
+    <span class="s2">if </span><span class="s4">&quot;class_&quot; </span><span class="s2">in </span><span class="s1">attrs:</span>
+        <span class="s1">attrs[</span><span class="s4">&quot;class&quot;</span><span class="s1">] = attrs.pop(</span><span class="s4">&quot;class_&quot;</span><span class="s1">)</span>
+
+    <span class="s1">s = </span><span class="s4">&quot; and &quot;</span><span class="s1">.join([</span><span class="s4">f&quot;@</span><span class="s2">{</span><span class="s1">k</span><span class="s2">}</span><span class="s4">=</span><span class="s2">{</span><span class="s1">repr(v)</span><span class="s2">}</span><span class="s4">&quot; </span><span class="s2">for </span><span class="s1">k</span><span class="s2">, </span><span class="s1">v </span><span class="s2">in </span><span class="s1">attrs.items()])</span>
+    <span class="s2">return </span><span class="s4">f&quot;[</span><span class="s2">{</span><span class="s1">s</span><span class="s2">}</span><span class="s4">]&quot;</span>
+
+
+<span class="s1">_re_namespace = {</span><span class="s4">&quot;re&quot;</span><span class="s1">: </span><span class="s4">&quot;http://exslt.org/regular-expressions&quot;</span><span class="s1">}</span>
+<span class="s1">_valid_schemes = </span><span class="s4">&quot;http&quot;</span><span class="s2">, </span><span class="s4">&quot;file&quot;</span><span class="s2">, </span><span class="s4">&quot;ftp&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">_LxmlFrameParser(_HtmlFrameParser):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    HTML to DataFrame parser that uses lxml under the hood. 
+ 
+    Warning 
+    ------- 
+    This parser can only handle HTTP, FTP, and FILE urls. 
+ 
+    See Also 
+    -------- 
+    _HtmlFrameParser 
+    _BeautifulSoupLxmlFrameParser 
+ 
+    Notes 
+    ----- 
+    Documentation strings for this class are in the base class 
+    :class:`_HtmlFrameParser`. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">*args</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+        <span class="s1">super().__init__(*args</span><span class="s2">, </span><span class="s1">**kwargs)</span>
+
+    <span class="s2">def </span><span class="s1">_text_getter(self</span><span class="s2">, </span><span class="s1">obj):</span>
+        <span class="s2">return </span><span class="s1">obj.text_content()</span>
+
+    <span class="s2">def </span><span class="s1">_parse_td(self</span><span class="s2">, </span><span class="s1">row):</span>
+        <span class="s3"># Look for direct children only: the &quot;row&quot; element here may be a</span>
+        <span class="s3"># &lt;thead&gt; or &lt;tfoot&gt; (see _parse_thead_tr).</span>
+        <span class="s2">return </span><span class="s1">row.xpath(</span><span class="s4">&quot;./td|./th&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tables(self</span><span class="s2">, </span><span class="s1">doc</span><span class="s2">, </span><span class="s1">match</span><span class="s2">, </span><span class="s1">kwargs):</span>
+        <span class="s1">pattern = match.pattern</span>
+
+        <span class="s3"># 1. check all descendants for the given pattern and only search tables</span>
+        <span class="s3"># 2. go up the tree until we find a table</span>
+        <span class="s1">xpath_expr = </span><span class="s4">f&quot;//table//*[re:test(text(), </span><span class="s2">{</span><span class="s1">repr(pattern)</span><span class="s2">}</span><span class="s4">)]/ancestor::table&quot;</span>
+
+        <span class="s3"># if any table attributes were given build an xpath expression to</span>
+        <span class="s3"># search for them</span>
+        <span class="s2">if </span><span class="s1">kwargs:</span>
+            <span class="s1">xpath_expr += _build_xpath_expr(kwargs)</span>
+
+        <span class="s1">tables = doc.xpath(xpath_expr</span><span class="s2">, </span><span class="s1">namespaces=_re_namespace)</span>
+
+        <span class="s1">tables = self._handle_hidden_tables(tables</span><span class="s2">, </span><span class="s4">&quot;attrib&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.displayed_only:</span>
+            <span class="s2">for </span><span class="s1">table </span><span class="s2">in </span><span class="s1">tables:</span>
+                <span class="s3"># lxml utilizes XPATH 1.0 which does not have regex</span>
+                <span class="s3"># support. As a result, we find all elements with a style</span>
+                <span class="s3"># attribute and iterate them to check for display:none</span>
+                <span class="s2">for </span><span class="s1">elem </span><span class="s2">in </span><span class="s1">table.xpath(</span><span class="s4">&quot;.//*[@style]&quot;</span><span class="s1">):</span>
+                    <span class="s2">if </span><span class="s4">&quot;display:none&quot; </span><span class="s2">in </span><span class="s1">elem.attrib.get(</span><span class="s4">&quot;style&quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s1">).replace(</span><span class="s4">&quot; &quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s1">):</span>
+                        <span class="s1">elem.getparent().remove(elem)</span>
+
+        <span class="s2">if not </span><span class="s1">tables:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;No tables found matching regex </span><span class="s2">{</span><span class="s1">repr(pattern)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">tables</span>
+
+    <span class="s2">def </span><span class="s1">_equals_tag(self</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">, </span><span class="s1">tag):</span>
+        <span class="s2">return </span><span class="s1">obj.tag == tag</span>
+
+    <span class="s2">def </span><span class="s1">_build_doc(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Raises 
+        ------ 
+        ValueError 
+            * If a URL that lxml cannot parse is passed. 
+ 
+        Exception 
+            * Any other ``Exception`` thrown. For example, trying to parse a 
+              URL that is syntactically correct on a machine with no internet 
+              connection will fail. 
+ 
+        See Also 
+        -------- 
+        pandas.io.html._HtmlFrameParser._build_doc 
+        &quot;&quot;&quot;</span>
+        <span class="s2">from </span><span class="s1">lxml.etree </span><span class="s2">import </span><span class="s1">XMLSyntaxError</span>
+        <span class="s2">from </span><span class="s1">lxml.html </span><span class="s2">import </span><span class="s1">HTMLParser</span><span class="s2">, </span><span class="s1">fromstring</span><span class="s2">, </span><span class="s1">parse</span>
+
+        <span class="s1">parser = HTMLParser(recover=</span><span class="s2">True, </span><span class="s1">encoding=self.encoding)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">is_url(self.io):</span>
+                <span class="s2">with </span><span class="s1">urlopen(self.io) </span><span class="s2">as </span><span class="s1">f:</span>
+                    <span class="s1">r = parse(f</span><span class="s2">, </span><span class="s1">parser=parser)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s3"># try to parse the input in the simplest way</span>
+                <span class="s1">r = parse(self.io</span><span class="s2">, </span><span class="s1">parser=parser)</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">r = r.getroot()</span>
+            <span class="s2">except </span><span class="s1">AttributeError:</span>
+                <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">(UnicodeDecodeError</span><span class="s2">, </span><span class="s1">OSError) </span><span class="s2">as </span><span class="s1">e:</span>
+            <span class="s3"># if the input is a blob of html goop</span>
+            <span class="s2">if not </span><span class="s1">is_url(self.io):</span>
+                <span class="s1">r = fromstring(self.io</span><span class="s2">, </span><span class="s1">parser=parser)</span>
+
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">r = r.getroot()</span>
+                <span class="s2">except </span><span class="s1">AttributeError:</span>
+                    <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">e</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if not </span><span class="s1">hasattr(r</span><span class="s2">, </span><span class="s4">&quot;text_content&quot;</span><span class="s1">):</span>
+                <span class="s2">raise </span><span class="s1">XMLSyntaxError(</span><span class="s4">&quot;no text parsed from document&quot;</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">r</span>
+
+    <span class="s2">def </span><span class="s1">_parse_thead_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s1">rows = []</span>
+
+        <span class="s2">for </span><span class="s1">thead </span><span class="s2">in </span><span class="s1">table.xpath(</span><span class="s4">&quot;.//thead&quot;</span><span class="s1">):</span>
+            <span class="s1">rows.extend(thead.xpath(</span><span class="s4">&quot;./tr&quot;</span><span class="s1">))</span>
+
+            <span class="s3"># HACK: lxml does not clean up the clearly-erroneous</span>
+            <span class="s3"># &lt;thead&gt;&lt;th&gt;foo&lt;/th&gt;&lt;th&gt;bar&lt;/th&gt;&lt;/thead&gt;. (Missing &lt;tr&gt;). Add</span>
+            <span class="s3"># the &lt;thead&gt; and _pretend_ it's a &lt;tr&gt;; _parse_td() will find its</span>
+            <span class="s3"># children as though it's a &lt;tr&gt;.</span>
+            <span class="s3">#</span>
+            <span class="s3"># Better solution would be to use html5lib.</span>
+            <span class="s1">elements_at_root = thead.xpath(</span><span class="s4">&quot;./td|./th&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">elements_at_root:</span>
+                <span class="s1">rows.append(thead)</span>
+
+        <span class="s2">return </span><span class="s1">rows</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tbody_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s1">from_tbody = table.xpath(</span><span class="s4">&quot;.//tbody//tr&quot;</span><span class="s1">)</span>
+        <span class="s1">from_root = table.xpath(</span><span class="s4">&quot;./tr&quot;</span><span class="s1">)</span>
+        <span class="s3"># HTML spec: at most one of these lists has content</span>
+        <span class="s2">return </span><span class="s1">from_tbody + from_root</span>
+
+    <span class="s2">def </span><span class="s1">_parse_tfoot_tr(self</span><span class="s2">, </span><span class="s1">table):</span>
+        <span class="s2">return </span><span class="s1">table.xpath(</span><span class="s4">&quot;.//tfoot//tr&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_expand_elements(body):</span>
+    <span class="s1">data = [len(elem) </span><span class="s2">for </span><span class="s1">elem </span><span class="s2">in </span><span class="s1">body]</span>
+    <span class="s1">lens = create_series_with_explicit_dtype(data</span><span class="s2">, </span><span class="s1">dtype_if_empty=object)</span>
+    <span class="s1">lens_max = lens.max()</span>
+    <span class="s1">not_max = lens[lens != lens_max]</span>
+
+    <span class="s1">empty = [</span><span class="s4">&quot;&quot;</span><span class="s1">]</span>
+    <span class="s2">for </span><span class="s1">ind</span><span class="s2">, </span><span class="s1">length </span><span class="s2">in </span><span class="s1">not_max.items():</span>
+        <span class="s1">body[ind] += empty * (lens_max - length)</span>
+
+
+<span class="s2">def </span><span class="s1">_data_to_frame(**kwargs):</span>
+    <span class="s1">head</span><span class="s2">, </span><span class="s1">body</span><span class="s2">, </span><span class="s1">foot = kwargs.pop(</span><span class="s4">&quot;data&quot;</span><span class="s1">)</span>
+    <span class="s1">header = kwargs.pop(</span><span class="s4">&quot;header&quot;</span><span class="s1">)</span>
+    <span class="s1">kwargs[</span><span class="s4">&quot;skiprows&quot;</span><span class="s1">] = _get_skiprows(kwargs[</span><span class="s4">&quot;skiprows&quot;</span><span class="s1">])</span>
+    <span class="s2">if </span><span class="s1">head:</span>
+        <span class="s1">body = head + body</span>
+
+        <span class="s3"># Infer header when there is a &lt;thead&gt; or top &lt;th&gt;-only rows</span>
+        <span class="s2">if </span><span class="s1">header </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">len(head) == </span><span class="s5">1</span><span class="s1">:</span>
+                <span class="s1">header = </span><span class="s5">0</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s3"># ignore all-empty-text rows</span>
+                <span class="s1">header = [i </span><span class="s2">for </span><span class="s1">i</span><span class="s2">, </span><span class="s1">row </span><span class="s2">in </span><span class="s1">enumerate(head) </span><span class="s2">if </span><span class="s1">any(text </span><span class="s2">for </span><span class="s1">text </span><span class="s2">in </span><span class="s1">row)]</span>
+
+    <span class="s2">if </span><span class="s1">foot:</span>
+        <span class="s1">body += foot</span>
+
+    <span class="s3"># fill out elements of body that are &quot;ragged&quot;</span>
+    <span class="s1">_expand_elements(body)</span>
+    <span class="s2">with </span><span class="s1">TextParser(body</span><span class="s2">, </span><span class="s1">header=header</span><span class="s2">, </span><span class="s1">**kwargs) </span><span class="s2">as </span><span class="s1">tp:</span>
+        <span class="s2">return </span><span class="s1">tp.read()</span>
+
+
+<span class="s1">_valid_parsers = {</span>
+    <span class="s4">&quot;lxml&quot;</span><span class="s1">: _LxmlFrameParser</span><span class="s2">,</span>
+    <span class="s2">None</span><span class="s1">: _LxmlFrameParser</span><span class="s2">,</span>
+    <span class="s4">&quot;html5lib&quot;</span><span class="s1">: _BeautifulSoupHtml5LibFrameParser</span><span class="s2">,</span>
+    <span class="s4">&quot;bs4&quot;</span><span class="s1">: _BeautifulSoupHtml5LibFrameParser</span><span class="s2">,</span>
+<span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">_parser_dispatch(flavor):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Choose the parser based on the input flavor. 
+ 
+    Parameters 
+    ---------- 
+    flavor : str 
+        The type of parser to use. This must be a valid backend. 
+ 
+    Returns 
+    ------- 
+    cls : _HtmlFrameParser subclass 
+        The parser class based on the requested input flavor. 
+ 
+    Raises 
+    ------ 
+    ValueError 
+        * If `flavor` is not a valid backend. 
+    ImportError 
+        * If you do not have the requested `flavor` 
+    &quot;&quot;&quot;</span>
+    <span class="s1">valid_parsers = list(_valid_parsers.keys())</span>
+    <span class="s2">if </span><span class="s1">flavor </span><span class="s2">not in </span><span class="s1">valid_parsers:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span>
+            <span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">repr(flavor)</span><span class="s2">} </span><span class="s4">is not a valid flavor, valid flavors are </span><span class="s2">{</span><span class="s1">valid_parsers</span><span class="s2">}</span><span class="s4">&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">flavor </span><span class="s2">in </span><span class="s1">(</span><span class="s4">&quot;bs4&quot;</span><span class="s2">, </span><span class="s4">&quot;html5lib&quot;</span><span class="s1">):</span>
+        <span class="s2">if not </span><span class="s1">_HAS_HTML5LIB:</span>
+            <span class="s2">raise </span><span class="s1">ImportError(</span><span class="s4">&quot;html5lib not found, please install it&quot;</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">_HAS_BS4:</span>
+            <span class="s2">raise </span><span class="s1">ImportError(</span><span class="s4">&quot;BeautifulSoup4 (bs4) not found, please install it&quot;</span><span class="s1">)</span>
+        <span class="s3"># Although we call this above, we want to raise here right before use.</span>
+        <span class="s1">bs4 = import_optional_dependency(</span><span class="s4">&quot;bs4&quot;</span><span class="s1">)  </span><span class="s3"># noqa:F841</span>
+
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">if not </span><span class="s1">_HAS_LXML:</span>
+            <span class="s2">raise </span><span class="s1">ImportError(</span><span class="s4">&quot;lxml not found, please install it&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_valid_parsers[flavor]</span>
+
+
+<span class="s2">def </span><span class="s1">_print_as_set(s) -&gt; str:</span>
+    <span class="s1">arg = </span><span class="s4">&quot;, &quot;</span><span class="s1">.join(pprint_thing(el) </span><span class="s2">for </span><span class="s1">el </span><span class="s2">in </span><span class="s1">s)</span>
+    <span class="s2">return </span><span class="s4">f&quot;</span><span class="s2">{{{</span><span class="s1">arg</span><span class="s2">}}}</span><span class="s4">&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_validate_flavor(flavor):</span>
+    <span class="s2">if </span><span class="s1">flavor </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">flavor = </span><span class="s4">&quot;lxml&quot;</span><span class="s2">, </span><span class="s4">&quot;bs4&quot;</span>
+    <span class="s2">elif </span><span class="s1">isinstance(flavor</span><span class="s2">, </span><span class="s1">str):</span>
+        <span class="s1">flavor = (flavor</span><span class="s2">,</span><span class="s1">)</span>
+    <span class="s2">elif </span><span class="s1">isinstance(flavor</span><span class="s2">, </span><span class="s1">abc.Iterable):</span>
+        <span class="s2">if not </span><span class="s1">all(isinstance(flav</span><span class="s2">, </span><span class="s1">str) </span><span class="s2">for </span><span class="s1">flav </span><span class="s2">in </span><span class="s1">flavor):</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span>
+                <span class="s4">f&quot;Object of type </span><span class="s2">{</span><span class="s1">repr(type(flavor).__name__)</span><span class="s2">} </span><span class="s4">&quot;</span>
+                <span class="s4">f&quot;is not an iterable of strings&quot;</span>
+            <span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">msg = repr(flavor) </span><span class="s2">if </span><span class="s1">isinstance(flavor</span><span class="s2">, </span><span class="s1">str) </span><span class="s2">else </span><span class="s1">str(flavor)</span>
+        <span class="s1">msg += </span><span class="s4">&quot; is not a valid flavor&quot;</span>
+        <span class="s2">raise </span><span class="s1">ValueError(msg)</span>
+
+    <span class="s1">flavor = tuple(flavor)</span>
+    <span class="s1">valid_flavors = set(_valid_parsers)</span>
+    <span class="s1">flavor_set = set(flavor)</span>
+
+    <span class="s2">if not </span><span class="s1">flavor_set &amp; valid_flavors:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span>
+            <span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">_print_as_set(flavor_set)</span><span class="s2">} </span><span class="s4">is not a valid set of flavors, valid &quot;</span>
+            <span class="s4">f&quot;flavors are </span><span class="s2">{</span><span class="s1">_print_as_set(valid_flavors)</span><span class="s2">}</span><span class="s4">&quot;</span>
+        <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">flavor</span>
+
+
+<span class="s2">def </span><span class="s1">_parse(flavor</span><span class="s2">, </span><span class="s1">io</span><span class="s2">, </span><span class="s1">match</span><span class="s2">, </span><span class="s1">attrs</span><span class="s2">, </span><span class="s1">encoding</span><span class="s2">, </span><span class="s1">displayed_only</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+    <span class="s1">flavor = _validate_flavor(flavor)</span>
+    <span class="s1">compiled_match = re.compile(match)  </span><span class="s3"># you can pass a compiled regex here</span>
+
+    <span class="s1">retained = </span><span class="s2">None</span>
+    <span class="s2">for </span><span class="s1">flav </span><span class="s2">in </span><span class="s1">flavor:</span>
+        <span class="s1">parser = _parser_dispatch(flav)</span>
+        <span class="s1">p = parser(io</span><span class="s2">, </span><span class="s1">compiled_match</span><span class="s2">, </span><span class="s1">attrs</span><span class="s2">, </span><span class="s1">encoding</span><span class="s2">, </span><span class="s1">displayed_only)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">tables = p.parse_tables()</span>
+        <span class="s2">except </span><span class="s1">ValueError </span><span class="s2">as </span><span class="s1">caught:</span>
+            <span class="s3"># if `io` is an io-like object, check if it's seekable</span>
+            <span class="s3"># and try to rewind it before trying the next parser</span>
+            <span class="s2">if </span><span class="s1">hasattr(io</span><span class="s2">, </span><span class="s4">&quot;seekable&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">io.seekable():</span>
+                <span class="s1">io.seek(</span><span class="s5">0</span><span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">hasattr(io</span><span class="s2">, </span><span class="s4">&quot;seekable&quot;</span><span class="s1">) </span><span class="s2">and not </span><span class="s1">io.seekable():</span>
+                <span class="s3"># if we couldn't rewind it, let the user know</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span>
+                    <span class="s4">f&quot;The flavor </span><span class="s2">{</span><span class="s1">flav</span><span class="s2">} </span><span class="s4">failed to parse your input. &quot;</span>
+                    <span class="s4">&quot;Since you passed a non-rewindable file &quot;</span>
+                    <span class="s4">&quot;object, we can't rewind it to try &quot;</span>
+                    <span class="s4">&quot;another parser. Try read_html() with a different flavor.&quot;</span>
+                <span class="s1">) </span><span class="s2">from </span><span class="s1">caught</span>
+
+            <span class="s1">retained = caught</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">break</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">assert </span><span class="s1">retained </span><span class="s2">is not None  </span><span class="s3"># for mypy</span>
+        <span class="s2">raise </span><span class="s1">retained</span>
+
+    <span class="s1">ret = []</span>
+    <span class="s2">for </span><span class="s1">table </span><span class="s2">in </span><span class="s1">tables:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">ret.append(_data_to_frame(data=table</span><span class="s2">, </span><span class="s1">**kwargs))</span>
+        <span class="s2">except </span><span class="s1">EmptyDataError:  </span><span class="s3"># empty table</span>
+            <span class="s2">continue</span>
+    <span class="s2">return </span><span class="s1">ret</span>
+
+
+<span class="s1">@deprecate_nonkeyword_arguments(version=</span><span class="s4">&quot;2.0&quot;</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">read_html(</span>
+    <span class="s1">io: FilePathOrBuffer</span><span class="s2">,</span>
+    <span class="s1">match: Union[str</span><span class="s2">, </span><span class="s1">Pattern] = </span><span class="s4">&quot;.+&quot;</span><span class="s2">,</span>
+    <span class="s1">flavor: Optional[str] = </span><span class="s2">None,</span>
+    <span class="s1">header: Optional[Union[int</span><span class="s2">, </span><span class="s1">Sequence[int]]] = </span><span class="s2">None,</span>
+    <span class="s1">index_col: Optional[Union[int</span><span class="s2">, </span><span class="s1">Sequence[int]]] = </span><span class="s2">None,</span>
+    <span class="s1">skiprows: Optional[Union[int</span><span class="s2">, </span><span class="s1">Sequence[int]</span><span class="s2">, </span><span class="s1">slice]] = </span><span class="s2">None,</span>
+    <span class="s1">attrs: Optional[Dict[str</span><span class="s2">, </span><span class="s1">str]] = </span><span class="s2">None,</span>
+    <span class="s1">parse_dates: bool = </span><span class="s2">False,</span>
+    <span class="s1">thousands: Optional[str] = </span><span class="s4">&quot;,&quot;</span><span class="s2">,</span>
+    <span class="s1">encoding: Optional[str] = </span><span class="s2">None,</span>
+    <span class="s1">decimal: str = </span><span class="s4">&quot;.&quot;</span><span class="s2">,</span>
+    <span class="s1">converters: Optional[Dict] = </span><span class="s2">None,</span>
+    <span class="s1">na_values=</span><span class="s2">None,</span>
+    <span class="s1">keep_default_na: bool = </span><span class="s2">True,</span>
+    <span class="s1">displayed_only: bool = </span><span class="s2">True,</span>
+<span class="s1">) -&gt; List[DataFrame]:</span>
+    <span class="s0">r&quot;&quot;&quot; 
+    Read HTML tables into a ``list`` of ``DataFrame`` objects. 
+ 
+    Parameters 
+    ---------- 
+    io : str, path object or file-like object 
+        A URL, a file-like object, or a raw string containing HTML. Note that 
+        lxml only accepts the http, ftp and file url protocols. If you have a 
+        URL that starts with ``'https'`` you might try removing the ``'s'``. 
+ 
+    match : str or compiled regular expression, optional 
+        The set of tables containing text matching this regex or string will be 
+        returned. Unless the HTML is extremely simple you will probably need to 
+        pass a non-empty string here. Defaults to '.+' (match any non-empty 
+        string). The default value will return all tables contained on a page. 
+        This value is converted to a regular expression so that there is 
+        consistent behavior between Beautiful Soup and lxml. 
+ 
+    flavor : str, optional 
+        The parsing engine to use. 'bs4' and 'html5lib' are synonymous with 
+        each other, they are both there for backwards compatibility. The 
+        default of ``None`` tries to use ``lxml`` to parse and if that fails it 
+        falls back on ``bs4`` + ``html5lib``. 
+ 
+    header : int or list-like, optional 
+        The row (or list of rows for a :class:`~pandas.MultiIndex`) to use to 
+        make the columns headers. 
+ 
+    index_col : int or list-like, optional 
+        The column (or list of columns) to use to create the index. 
+ 
+    skiprows : int, list-like or slice, optional 
+        Number of rows to skip after parsing the column integer. 0-based. If a 
+        sequence of integers or a slice is given, will skip the rows indexed by 
+        that sequence.  Note that a single element sequence means 'skip the nth 
+        row' whereas an integer means 'skip n rows'. 
+ 
+    attrs : dict, optional 
+        This is a dictionary of attributes that you can pass to use to identify 
+        the table in the HTML. These are not checked for validity before being 
+        passed to lxml or Beautiful Soup. However, these attributes must be 
+        valid HTML table attributes to work correctly. For example, :: 
+ 
+            attrs = {'id': 'table'} 
+ 
+        is a valid attribute dictionary because the 'id' HTML tag attribute is 
+        a valid HTML attribute for *any* HTML tag as per `this document 
+        &lt;https://html.spec.whatwg.org/multipage/dom.html#global-attributes&gt;`__. :: 
+ 
+            attrs = {'asdf': 'table'} 
+ 
+        is *not* a valid attribute dictionary because 'asdf' is not a valid 
+        HTML attribute even if it is a valid XML attribute.  Valid HTML 4.01 
+        table attributes can be found `here 
+        &lt;http://www.w3.org/TR/REC-html40/struct/tables.html#h-11.2&gt;`__. A 
+        working draft of the HTML 5 spec can be found `here 
+        &lt;https://html.spec.whatwg.org/multipage/tables.html&gt;`__. It contains the 
+        latest information on table attributes for the modern web. 
+ 
+    parse_dates : bool, optional 
+        See :func:`~read_csv` for more details. 
+ 
+    thousands : str, optional 
+        Separator to use to parse thousands. Defaults to ``','``. 
+ 
+    encoding : str, optional 
+        The encoding used to decode the web page. Defaults to ``None``.``None`` 
+        preserves the previous encoding behavior, which depends on the 
+        underlying parser library (e.g., the parser library will try to use 
+        the encoding provided by the document). 
+ 
+    decimal : str, default '.' 
+        Character to recognize as decimal point (e.g. use ',' for European 
+        data). 
+ 
+    converters : dict, default None 
+        Dict of functions for converting values in certain columns. Keys can 
+        either be integers or column labels, values are functions that take one 
+        input argument, the cell (not column) content, and return the 
+        transformed content. 
+ 
+    na_values : iterable, default None 
+        Custom NA values. 
+ 
+    keep_default_na : bool, default True 
+        If na_values are specified and keep_default_na is False the default NaN 
+        values are overridden, otherwise they're appended to. 
+ 
+    displayed_only : bool, default True 
+        Whether elements with &quot;display: none&quot; should be parsed. 
+ 
+    Returns 
+    ------- 
+    dfs 
+        A list of DataFrames. 
+ 
+    See Also 
+    -------- 
+    read_csv : Read a comma-separated values (csv) file into DataFrame. 
+ 
+    Notes 
+    ----- 
+    Before using this function you should read the :ref:`gotchas about the 
+    HTML parsing libraries &lt;io.html.gotchas&gt;`. 
+ 
+    Expect to do some cleanup after you call this function. For example, you 
+    might need to manually assign column names if the column names are 
+    converted to NaN when you pass the `header=0` argument. We try to assume as 
+    little as possible about the structure of the table and push the 
+    idiosyncrasies of the HTML contained in the table to the user. 
+ 
+    This function searches for ``&lt;table&gt;`` elements and only for ``&lt;tr&gt;`` 
+    and ``&lt;th&gt;`` rows and ``&lt;td&gt;`` elements within each ``&lt;tr&gt;`` or ``&lt;th&gt;`` 
+    element in the table. ``&lt;td&gt;`` stands for &quot;table data&quot;. This function 
+    attempts to properly handle ``colspan`` and ``rowspan`` attributes. 
+    If the function has a ``&lt;thead&gt;`` argument, it is used to construct 
+    the header, otherwise the function attempts to find the header within 
+    the body (by putting rows with only ``&lt;th&gt;`` elements into the header). 
+ 
+    Similar to :func:`~read_csv` the `header` argument is applied 
+    **after** `skiprows` is applied. 
+ 
+    This function will *always* return a list of :class:`DataFrame` *or* 
+    it will fail, e.g., it will *not* return an empty list. 
+ 
+    Examples 
+    -------- 
+    See the :ref:`read_html documentation in the IO section of the docs 
+    &lt;io.read_html&gt;` for some examples of reading in HTML tables. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">_importers()</span>
+
+    <span class="s3"># Type check here. We don't want to parse only to fail because of an</span>
+    <span class="s3"># invalid value of an integer skiprows.</span>
+    <span class="s2">if </span><span class="s1">isinstance(skiprows</span><span class="s2">, </span><span class="s1">numbers.Integral) </span><span class="s2">and </span><span class="s1">skiprows &lt; </span><span class="s5">0</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span>
+            <span class="s4">&quot;cannot skip rows starting from the end of the &quot;</span>
+            <span class="s4">&quot;data (you passed a negative value)&quot;</span>
+        <span class="s1">)</span>
+    <span class="s1">validate_header_arg(header)</span>
+
+    <span class="s1">io = stringify_path(io)</span>
+
+    <span class="s2">return </span><span class="s1">_parse(</span>
+        <span class="s1">flavor=flavor</span><span class="s2">,</span>
+        <span class="s1">io=io</span><span class="s2">,</span>
+        <span class="s1">match=match</span><span class="s2">,</span>
+        <span class="s1">header=header</span><span class="s2">,</span>
+        <span class="s1">index_col=index_col</span><span class="s2">,</span>
+        <span class="s1">skiprows=skiprows</span><span class="s2">,</span>
+        <span class="s1">parse_dates=parse_dates</span><span class="s2">,</span>
+        <span class="s1">thousands=thousands</span><span class="s2">,</span>
+        <span class="s1">attrs=attrs</span><span class="s2">,</span>
+        <span class="s1">encoding=encoding</span><span class="s2">,</span>
+        <span class="s1">decimal=decimal</span><span class="s2">,</span>
+        <span class="s1">converters=converters</span><span class="s2">,</span>
+        <span class="s1">na_values=na_values</span><span class="s2">,</span>
+        <span class="s1">keep_default_na=keep_default_na</span><span class="s2">,</span>
+        <span class="s1">displayed_only=displayed_only</span><span class="s2">,</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

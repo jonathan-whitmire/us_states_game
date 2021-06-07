@@ -1,0 +1,232 @@
+<html>
+<head>
+<title>test_decorators.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6a8759;}
+.s4 { color: #808080;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_decorators.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Test the decorators from ``testing.decorators``. 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s2">import </span><span class="s1">pytest</span>
+
+<span class="s2">from </span><span class="s1">numpy.testing </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">assert_</span><span class="s2">, </span><span class="s1">assert_raises</span><span class="s2">, </span><span class="s1">dec</span><span class="s2">, </span><span class="s1">SkipTest</span><span class="s2">, </span><span class="s1">KnownFailureException</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">with </span><span class="s1">warnings.catch_warnings():</span>
+        <span class="s1">warnings.simplefilter(</span><span class="s3">&quot;always&quot;</span><span class="s1">)</span>
+        <span class="s2">import </span><span class="s1">nose  </span><span class="s4"># noqa: F401</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">HAVE_NOSE = </span><span class="s2">False</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">HAVE_NOSE = </span><span class="s2">True</span>
+
+
+<span class="s1">@pytest.mark.skipif(</span><span class="s2">not </span><span class="s1">HAVE_NOSE</span><span class="s2">, </span><span class="s1">reason=</span><span class="s3">&quot;Needs nose&quot;</span><span class="s1">)</span>
+<span class="s2">class </span><span class="s1">TestNoseDecorators:</span>
+    <span class="s4"># These tests are run in a class for simplicity while still</span>
+    <span class="s4"># getting a report on each, skipped or success.</span>
+
+    <span class="s2">class </span><span class="s1">DidntSkipException(Exception):</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">test_slow(self):</span>
+        <span class="s1">@dec.slow</span>
+        <span class="s2">def </span><span class="s1">slow_func(x</span><span class="s2">, </span><span class="s1">y</span><span class="s2">, </span><span class="s1">z):</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">assert_(slow_func.slow)</span>
+
+    <span class="s2">def </span><span class="s1">test_setastest(self):</span>
+        <span class="s1">@dec.setastest()</span>
+        <span class="s2">def </span><span class="s1">f_default(a):</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">@dec.setastest(</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">f_istest(a):</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">@dec.setastest(</span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">f_isnottest(a):</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">assert_(f_default.__test__)</span>
+        <span class="s1">assert_(f_istest.__test__)</span>
+        <span class="s1">assert_(</span><span class="s2">not </span><span class="s1">f_isnottest.__test__)</span>
+
+    <span class="s2">def </span><span class="s1">test_skip_functions_hardcoded(self):</span>
+        <span class="s1">@dec.skipif(</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">f1(x):</span>
+            <span class="s2">raise </span><span class="s1">self.DidntSkipException</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">f1(</span><span class="s3">'a'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.DidntSkipException:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Failed to skip'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">SkipTest().__class__:</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">@dec.skipif(</span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">f2(x):</span>
+            <span class="s2">raise </span><span class="s1">self.DidntSkipException</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">f2(</span><span class="s3">'a'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.DidntSkipException:</span>
+            <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">SkipTest().__class__:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Skipped when not expected to'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">test_skip_functions_callable(self):</span>
+        <span class="s2">def </span><span class="s1">skip_tester():</span>
+            <span class="s2">return </span><span class="s1">skip_flag == </span><span class="s3">'skip me!'</span>
+
+        <span class="s1">@dec.skipif(skip_tester)</span>
+        <span class="s2">def </span><span class="s1">f1(x):</span>
+            <span class="s2">raise </span><span class="s1">self.DidntSkipException</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">skip_flag = </span><span class="s3">'skip me!'</span>
+            <span class="s1">f1(</span><span class="s3">'a'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.DidntSkipException:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Failed to skip'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">SkipTest().__class__:</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">@dec.skipif(skip_tester)</span>
+        <span class="s2">def </span><span class="s1">f2(x):</span>
+            <span class="s2">raise </span><span class="s1">self.DidntSkipException</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">skip_flag = </span><span class="s3">'five is right out!'</span>
+            <span class="s1">f2(</span><span class="s3">'a'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.DidntSkipException:</span>
+            <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">SkipTest().__class__:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Skipped when not expected to'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">test_skip_generators_hardcoded(self):</span>
+        <span class="s1">@dec.knownfailureif(</span><span class="s2">True, </span><span class="s3">&quot;This test is known to fail&quot;</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">g1(x):</span>
+            <span class="s2">yield from </span><span class="s1">range(x)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">j </span><span class="s2">in </span><span class="s1">g1(</span><span class="s5">10</span><span class="s1">):</span>
+                <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">KnownFailureException().__class__:</span>
+            <span class="s2">pass</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Failed to mark as known failure'</span><span class="s1">)</span>
+
+        <span class="s1">@dec.knownfailureif(</span><span class="s2">False, </span><span class="s3">&quot;This test is NOT known to fail&quot;</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">g2(x):</span>
+            <span class="s2">yield from </span><span class="s1">range(x)</span>
+            <span class="s2">raise </span><span class="s1">self.DidntSkipException(</span><span class="s3">'FAIL'</span><span class="s1">)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">j </span><span class="s2">in </span><span class="s1">g2(</span><span class="s5">10</span><span class="s1">):</span>
+                <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">KnownFailureException().__class__:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Marked incorrectly as known failure'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.DidntSkipException:</span>
+            <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">test_skip_generators_callable(self):</span>
+        <span class="s2">def </span><span class="s1">skip_tester():</span>
+            <span class="s2">return </span><span class="s1">skip_flag == </span><span class="s3">'skip me!'</span>
+
+        <span class="s1">@dec.knownfailureif(skip_tester</span><span class="s2">, </span><span class="s3">&quot;This test is known to fail&quot;</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">g1(x):</span>
+            <span class="s2">yield from </span><span class="s1">range(x)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">skip_flag = </span><span class="s3">'skip me!'</span>
+            <span class="s2">for </span><span class="s1">j </span><span class="s2">in </span><span class="s1">g1(</span><span class="s5">10</span><span class="s1">):</span>
+                <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">KnownFailureException().__class__:</span>
+            <span class="s2">pass</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Failed to mark as known failure'</span><span class="s1">)</span>
+
+        <span class="s1">@dec.knownfailureif(skip_tester</span><span class="s2">, </span><span class="s3">&quot;This test is NOT known to fail&quot;</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">g2(x):</span>
+            <span class="s2">yield from </span><span class="s1">range(x)</span>
+            <span class="s2">raise </span><span class="s1">self.DidntSkipException(</span><span class="s3">'FAIL'</span><span class="s1">)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">skip_flag = </span><span class="s3">'do not skip'</span>
+            <span class="s2">for </span><span class="s1">j </span><span class="s2">in </span><span class="s1">g2(</span><span class="s5">10</span><span class="s1">):</span>
+                <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">KnownFailureException().__class__:</span>
+            <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">'Marked incorrectly as known failure'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.DidntSkipException:</span>
+            <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">test_deprecated(self):</span>
+        <span class="s1">@dec.deprecated(</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">def </span><span class="s1">non_deprecated_func():</span>
+            <span class="s2">pass</span>
+
+        <span class="s1">@dec.deprecated()</span>
+        <span class="s2">def </span><span class="s1">deprecated_func():</span>
+            <span class="s2">import </span><span class="s1">warnings</span>
+            <span class="s1">warnings.warn(</span><span class="s3">&quot;TEST: deprecated func&quot;</span><span class="s2">, </span><span class="s1">DeprecationWarning)</span>
+
+        <span class="s1">@dec.deprecated()</span>
+        <span class="s2">def </span><span class="s1">deprecated_func2():</span>
+            <span class="s2">import </span><span class="s1">warnings</span>
+            <span class="s1">warnings.warn(</span><span class="s3">&quot;AHHHH&quot;</span><span class="s1">)</span>
+            <span class="s2">raise </span><span class="s1">ValueError</span>
+
+        <span class="s1">@dec.deprecated()</span>
+        <span class="s2">def </span><span class="s1">deprecated_func3():</span>
+            <span class="s2">import </span><span class="s1">warnings</span>
+            <span class="s1">warnings.warn(</span><span class="s3">&quot;AHHHH&quot;</span><span class="s1">)</span>
+
+        <span class="s4"># marked as deprecated, but does not raise DeprecationWarning</span>
+        <span class="s1">assert_raises(AssertionError</span><span class="s2">, </span><span class="s1">non_deprecated_func)</span>
+        <span class="s4"># should be silent</span>
+        <span class="s1">deprecated_func()</span>
+        <span class="s2">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s2">True</span><span class="s1">):</span>
+            <span class="s1">warnings.simplefilter(</span><span class="s3">&quot;always&quot;</span><span class="s1">)  </span><span class="s4"># do not propagate unrelated warnings</span>
+            <span class="s4"># fails if deprecated decorator just disables test. See #1453.</span>
+            <span class="s1">assert_raises(ValueError</span><span class="s2">, </span><span class="s1">deprecated_func2)</span>
+            <span class="s4"># warning is not a DeprecationWarning</span>
+            <span class="s1">assert_raises(AssertionError</span><span class="s2">, </span><span class="s1">deprecated_func3)</span>
+
+    <span class="s2">def </span><span class="s1">test_parametrize(self):</span>
+        <span class="s4"># dec.parametrize assumes that it is being run by nose. Because</span>
+        <span class="s4"># we are running under pytest, we need to explicitly check the</span>
+        <span class="s4"># results.</span>
+        <span class="s1">@dec.parametrize(</span><span class="s3">'base, power, expected'</span><span class="s2">,</span>
+                <span class="s1">[(</span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">1</span><span class="s1">)</span><span class="s2">,</span>
+                 <span class="s1">(</span><span class="s5">2</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s1">)</span><span class="s2">,</span>
+                 <span class="s1">(</span><span class="s5">2</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">4</span><span class="s1">)])</span>
+        <span class="s2">def </span><span class="s1">check_parametrize(base</span><span class="s2">, </span><span class="s1">power</span><span class="s2">, </span><span class="s1">expected):</span>
+            <span class="s1">assert_(base**power == expected)</span>
+
+        <span class="s1">count = </span><span class="s5">0</span>
+        <span class="s2">for </span><span class="s1">test </span><span class="s2">in </span><span class="s1">check_parametrize():</span>
+            <span class="s1">test[</span><span class="s5">0</span><span class="s1">](*test[</span><span class="s5">1</span><span class="s1">:])</span>
+            <span class="s1">count += </span><span class="s5">1</span>
+        <span class="s1">assert_(count == </span><span class="s5">3</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

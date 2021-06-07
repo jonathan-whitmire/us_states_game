@@ -1,0 +1,382 @@
+<html>
+<head>
+<title>util.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #808080;}
+.s4 { color: #6897bb;}
+.s5 { color: #6a8759;}
+.s6 { color: #a5c261;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+util.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Utility functions for 
+ 
+- building and importing modules on test time, using a temporary location 
+- detecting if compilers are present 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">subprocess</span>
+<span class="s2">import </span><span class="s1">tempfile</span>
+<span class="s2">import </span><span class="s1">shutil</span>
+<span class="s2">import </span><span class="s1">atexit</span>
+<span class="s2">import </span><span class="s1">textwrap</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">pytest</span>
+
+<span class="s2">from </span><span class="s1">numpy.compat </span><span class="s2">import </span><span class="s1">asbytes</span><span class="s2">, </span><span class="s1">asstr</span>
+<span class="s2">from </span><span class="s1">numpy.testing </span><span class="s2">import </span><span class="s1">temppath</span>
+<span class="s2">from </span><span class="s1">importlib </span><span class="s2">import </span><span class="s1">import_module</span>
+
+<span class="s3">#</span>
+<span class="s3"># Maintaining a temporary module directory</span>
+<span class="s3">#</span>
+
+<span class="s1">_module_dir = </span><span class="s2">None</span>
+<span class="s1">_module_num = </span><span class="s4">5403</span>
+
+
+<span class="s2">def </span><span class="s1">_cleanup():</span>
+    <span class="s2">global </span><span class="s1">_module_dir</span>
+    <span class="s2">if </span><span class="s1">_module_dir </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">sys.path.remove(_module_dir)</span>
+        <span class="s2">except </span><span class="s1">ValueError:</span>
+            <span class="s2">pass</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">shutil.rmtree(_module_dir)</span>
+        <span class="s2">except </span><span class="s1">(IOError</span><span class="s2">, </span><span class="s1">OSError):</span>
+            <span class="s2">pass</span>
+        <span class="s1">_module_dir = </span><span class="s2">None</span>
+
+
+<span class="s2">def </span><span class="s1">get_module_dir():</span>
+    <span class="s2">global </span><span class="s1">_module_dir</span>
+    <span class="s2">if </span><span class="s1">_module_dir </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">_module_dir = tempfile.mkdtemp()</span>
+        <span class="s1">atexit.register(_cleanup)</span>
+        <span class="s2">if </span><span class="s1">_module_dir </span><span class="s2">not in </span><span class="s1">sys.path:</span>
+            <span class="s1">sys.path.insert(</span><span class="s4">0</span><span class="s2">, </span><span class="s1">_module_dir)</span>
+    <span class="s2">return </span><span class="s1">_module_dir</span>
+
+
+<span class="s2">def </span><span class="s1">get_temp_module_name():</span>
+    <span class="s3"># Assume single-threaded, and the module dir usable only by this thread</span>
+    <span class="s2">global </span><span class="s1">_module_num</span>
+    <span class="s1">d = get_module_dir()</span>
+    <span class="s1">name = </span><span class="s5">&quot;_test_ext_module_%d&quot; </span><span class="s1">% _module_num</span>
+    <span class="s1">_module_num += </span><span class="s4">1</span>
+    <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">sys.modules:</span>
+        <span class="s3"># this should not be possible, but check anyway</span>
+        <span class="s2">raise </span><span class="s1">RuntimeError(</span><span class="s5">&quot;Temporary module name already in use.&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">name</span>
+
+
+<span class="s2">def </span><span class="s1">_memoize(func):</span>
+    <span class="s1">memo = {}</span>
+
+    <span class="s2">def </span><span class="s1">wrapper(*a</span><span class="s2">, </span><span class="s1">**kw):</span>
+        <span class="s1">key = repr((a</span><span class="s2">, </span><span class="s1">kw))</span>
+        <span class="s2">if </span><span class="s1">key </span><span class="s2">not in </span><span class="s1">memo:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">memo[key] = func(*a</span><span class="s2">, </span><span class="s1">**kw)</span>
+            <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s1">memo[key] = e</span>
+                <span class="s2">raise</span>
+        <span class="s1">ret = memo[key]</span>
+        <span class="s2">if </span><span class="s1">isinstance(ret</span><span class="s2">, </span><span class="s1">Exception):</span>
+            <span class="s2">raise </span><span class="s1">ret</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+    <span class="s1">wrapper.__name__ = func.__name__</span>
+    <span class="s2">return </span><span class="s1">wrapper</span>
+
+<span class="s3">#</span>
+<span class="s3"># Building modules</span>
+<span class="s3">#</span>
+
+
+<span class="s1">@_memoize</span>
+<span class="s2">def </span><span class="s1">build_module(source_files</span><span class="s2">, </span><span class="s1">options=[]</span><span class="s2">, </span><span class="s1">skip=[]</span><span class="s2">, </span><span class="s1">only=[]</span><span class="s2">, </span><span class="s1">module_name=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compile and import a f2py module, built from the given files. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">code = (</span><span class="s5">&quot;import sys; sys.path = %s; import numpy.f2py as f2py2e; &quot;</span>
+            <span class="s5">&quot;f2py2e.main()&quot; </span><span class="s1">% repr(sys.path))</span>
+
+    <span class="s1">d = get_module_dir()</span>
+
+    <span class="s3"># Copy files</span>
+    <span class="s1">dst_sources = []</span>
+    <span class="s1">f2py_sources = []</span>
+    <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">source_files:</span>
+        <span class="s2">if not </span><span class="s1">os.path.isfile(fn):</span>
+            <span class="s2">raise </span><span class="s1">RuntimeError(</span><span class="s5">&quot;%s is not a file&quot; </span><span class="s1">% fn)</span>
+        <span class="s1">dst = os.path.join(d</span><span class="s2">, </span><span class="s1">os.path.basename(fn))</span>
+        <span class="s1">shutil.copyfile(fn</span><span class="s2">, </span><span class="s1">dst)</span>
+        <span class="s1">dst_sources.append(dst)</span>
+
+        <span class="s1">base</span><span class="s2">, </span><span class="s1">ext = os.path.splitext(dst)</span>
+        <span class="s2">if </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">(</span><span class="s5">'.f90'</span><span class="s2">, </span><span class="s5">'.f'</span><span class="s2">, </span><span class="s5">'.c'</span><span class="s2">, </span><span class="s5">'.pyf'</span><span class="s1">):</span>
+            <span class="s1">f2py_sources.append(dst)</span>
+
+    <span class="s3"># Prepare options</span>
+    <span class="s2">if </span><span class="s1">module_name </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">module_name = get_temp_module_name()</span>
+    <span class="s1">f2py_opts = [</span><span class="s5">'-c'</span><span class="s2">, </span><span class="s5">'-m'</span><span class="s2">, </span><span class="s1">module_name] + options + f2py_sources</span>
+    <span class="s2">if </span><span class="s1">skip:</span>
+        <span class="s1">f2py_opts += [</span><span class="s5">'skip:'</span><span class="s1">] + skip</span>
+    <span class="s2">if </span><span class="s1">only:</span>
+        <span class="s1">f2py_opts += [</span><span class="s5">'only:'</span><span class="s1">] + only</span>
+
+    <span class="s3"># Build</span>
+    <span class="s1">cwd = os.getcwd()</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">os.chdir(d)</span>
+        <span class="s1">cmd = [sys.executable</span><span class="s2">, </span><span class="s5">'-c'</span><span class="s2">, </span><span class="s1">code] + f2py_opts</span>
+        <span class="s1">p = subprocess.Popen(cmd</span><span class="s2">, </span><span class="s1">stdout=subprocess.PIPE</span><span class="s2">,</span>
+                             <span class="s1">stderr=subprocess.STDOUT)</span>
+        <span class="s1">out</span><span class="s2">, </span><span class="s1">err = p.communicate()</span>
+        <span class="s2">if </span><span class="s1">p.returncode != </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">RuntimeError(</span><span class="s5">&quot;Running f2py failed: %s</span><span class="s2">\n</span><span class="s5">%s&quot;</span>
+                               <span class="s1">% (cmd[</span><span class="s4">4</span><span class="s1">:]</span><span class="s2">, </span><span class="s1">asstr(out)))</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s1">os.chdir(cwd)</span>
+
+        <span class="s3"># Partial cleanup</span>
+        <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">dst_sources:</span>
+            <span class="s1">os.unlink(fn)</span>
+
+    <span class="s3"># Import</span>
+    <span class="s2">return </span><span class="s1">import_module(module_name)</span>
+
+
+<span class="s1">@_memoize</span>
+<span class="s2">def </span><span class="s1">build_code(source_code</span><span class="s2">, </span><span class="s1">options=[]</span><span class="s2">, </span><span class="s1">skip=[]</span><span class="s2">, </span><span class="s1">only=[]</span><span class="s2">, </span><span class="s1">suffix=</span><span class="s2">None,</span>
+               <span class="s1">module_name=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Compile and import Fortran code using f2py. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">suffix </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">suffix = </span><span class="s5">'.f'</span>
+    <span class="s2">with </span><span class="s1">temppath(suffix=suffix) </span><span class="s2">as </span><span class="s1">path:</span>
+        <span class="s2">with </span><span class="s1">open(path</span><span class="s2">, </span><span class="s5">'w'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s1">f.write(source_code)</span>
+        <span class="s2">return </span><span class="s1">build_module([path]</span><span class="s2">, </span><span class="s1">options=options</span><span class="s2">, </span><span class="s1">skip=skip</span><span class="s2">, </span><span class="s1">only=only</span><span class="s2">,</span>
+                            <span class="s1">module_name=module_name)</span>
+
+<span class="s3">#</span>
+<span class="s3"># Check if compilers are available at all...</span>
+<span class="s3">#</span>
+
+<span class="s1">_compiler_status = </span><span class="s2">None</span>
+
+
+<span class="s2">def </span><span class="s1">_get_compiler_status():</span>
+    <span class="s2">global </span><span class="s1">_compiler_status</span>
+    <span class="s2">if </span><span class="s1">_compiler_status </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">_compiler_status</span>
+
+    <span class="s1">_compiler_status = (</span><span class="s2">False, False, False</span><span class="s1">)</span>
+
+    <span class="s3"># XXX: this is really ugly. But I don't know how to invoke Distutils</span>
+    <span class="s3">#      in a safer way...</span>
+    <span class="s1">code = textwrap.dedent(</span><span class="s5">&quot;&quot;&quot;</span><span class="s2">\ 
+        </span><span class="s5">import os 
+        import sys 
+        sys.path = %(syspath)s 
+ 
+        def configuration(parent_name='',top_path=None): 
+            global config 
+            from numpy.distutils.misc_util import Configuration 
+            config = Configuration('', parent_name, top_path) 
+            return config 
+ 
+        from numpy.distutils.core import setup 
+        setup(configuration=configuration) 
+ 
+        config_cmd = config.get_config_cmd() 
+        have_c = config_cmd.try_compile('void foo() {}') 
+        print('COMPILERS:%%d,%%d,%%d' %% (have_c, 
+                                          config.have_f77c(), 
+                                          config.have_f90c())) 
+        sys.exit(99) 
+        &quot;&quot;&quot;</span><span class="s1">)</span>
+    <span class="s1">code = code % dict(syspath=repr(sys.path))</span>
+
+    <span class="s1">tmpdir = tempfile.mkdtemp()</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">script = os.path.join(tmpdir</span><span class="s2">, </span><span class="s5">'setup.py'</span><span class="s1">)</span>
+
+        <span class="s2">with </span><span class="s1">open(script</span><span class="s2">, </span><span class="s5">'w'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s1">f.write(code)</span>
+
+        <span class="s1">cmd = [sys.executable</span><span class="s2">, </span><span class="s5">'setup.py'</span><span class="s2">, </span><span class="s5">'config'</span><span class="s1">]</span>
+        <span class="s1">p = subprocess.Popen(cmd</span><span class="s2">, </span><span class="s1">stdout=subprocess.PIPE</span><span class="s2">,</span>
+                             <span class="s1">stderr=subprocess.STDOUT</span><span class="s2">,</span>
+                             <span class="s1">cwd=tmpdir)</span>
+        <span class="s1">out</span><span class="s2">, </span><span class="s1">err = p.communicate()</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s1">shutil.rmtree(tmpdir)</span>
+
+    <span class="s1">m = re.search(</span><span class="s6">br'COMPILERS:(\d+),(\d+),(\d+)'</span><span class="s2">, </span><span class="s1">out)</span>
+    <span class="s2">if </span><span class="s1">m:</span>
+        <span class="s1">_compiler_status = (bool(int(m.group(</span><span class="s4">1</span><span class="s1">)))</span><span class="s2">, </span><span class="s1">bool(int(m.group(</span><span class="s4">2</span><span class="s1">)))</span><span class="s2">,</span>
+                            <span class="s1">bool(int(m.group(</span><span class="s4">3</span><span class="s1">))))</span>
+    <span class="s3"># Finished</span>
+    <span class="s2">return </span><span class="s1">_compiler_status</span>
+
+
+<span class="s2">def </span><span class="s1">has_c_compiler():</span>
+    <span class="s2">return </span><span class="s1">_get_compiler_status()[</span><span class="s4">0</span><span class="s1">]</span>
+
+
+<span class="s2">def </span><span class="s1">has_f77_compiler():</span>
+    <span class="s2">return </span><span class="s1">_get_compiler_status()[</span><span class="s4">1</span><span class="s1">]</span>
+
+
+<span class="s2">def </span><span class="s1">has_f90_compiler():</span>
+    <span class="s2">return </span><span class="s1">_get_compiler_status()[</span><span class="s4">2</span><span class="s1">]</span>
+
+<span class="s3">#</span>
+<span class="s3"># Building with distutils</span>
+<span class="s3">#</span>
+
+
+<span class="s1">@_memoize</span>
+<span class="s2">def </span><span class="s1">build_module_distutils(source_files</span><span class="s2">, </span><span class="s1">config_code</span><span class="s2">, </span><span class="s1">module_name</span><span class="s2">, </span><span class="s1">**kw):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Build a module via distutils and import it. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">from </span><span class="s1">numpy.distutils.misc_util </span><span class="s2">import </span><span class="s1">Configuration</span>
+    <span class="s2">from </span><span class="s1">numpy.distutils.core </span><span class="s2">import </span><span class="s1">setup</span>
+
+    <span class="s1">d = get_module_dir()</span>
+
+    <span class="s3"># Copy files</span>
+    <span class="s1">dst_sources = []</span>
+    <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">source_files:</span>
+        <span class="s2">if not </span><span class="s1">os.path.isfile(fn):</span>
+            <span class="s2">raise </span><span class="s1">RuntimeError(</span><span class="s5">&quot;%s is not a file&quot; </span><span class="s1">% fn)</span>
+        <span class="s1">dst = os.path.join(d</span><span class="s2">, </span><span class="s1">os.path.basename(fn))</span>
+        <span class="s1">shutil.copyfile(fn</span><span class="s2">, </span><span class="s1">dst)</span>
+        <span class="s1">dst_sources.append(dst)</span>
+
+    <span class="s3"># Build script</span>
+    <span class="s1">config_code = textwrap.dedent(config_code).replace(</span><span class="s5">&quot;</span><span class="s2">\n</span><span class="s5">&quot;</span><span class="s2">, </span><span class="s5">&quot;</span><span class="s2">\n    </span><span class="s5">&quot;</span><span class="s1">)</span>
+
+    <span class="s1">code = textwrap.dedent(</span><span class="s5">&quot;&quot;&quot;</span><span class="s2">\ 
+        </span><span class="s5">import os 
+        import sys 
+        sys.path = %(syspath)s 
+ 
+        def configuration(parent_name='',top_path=None): 
+            from numpy.distutils.misc_util import Configuration 
+            config = Configuration('', parent_name, top_path) 
+            %(config_code)s 
+            return config 
+ 
+        if __name__ == &quot;__main__&quot;: 
+            from numpy.distutils.core import setup 
+            setup(configuration=configuration) 
+        &quot;&quot;&quot;</span><span class="s1">) % dict(config_code=config_code</span><span class="s2">, </span><span class="s1">syspath=repr(sys.path))</span>
+
+    <span class="s1">script = os.path.join(d</span><span class="s2">, </span><span class="s1">get_temp_module_name() + </span><span class="s5">'.py'</span><span class="s1">)</span>
+    <span class="s1">dst_sources.append(script)</span>
+    <span class="s2">with </span><span class="s1">open(script</span><span class="s2">, </span><span class="s5">'wb'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+        <span class="s1">f.write(asbytes(code))</span>
+
+    <span class="s3"># Build</span>
+    <span class="s1">cwd = os.getcwd()</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">os.chdir(d)</span>
+        <span class="s1">cmd = [sys.executable</span><span class="s2">, </span><span class="s1">script</span><span class="s2">, </span><span class="s5">'build_ext'</span><span class="s2">, </span><span class="s5">'-i'</span><span class="s1">]</span>
+        <span class="s1">p = subprocess.Popen(cmd</span><span class="s2">, </span><span class="s1">stdout=subprocess.PIPE</span><span class="s2">,</span>
+                             <span class="s1">stderr=subprocess.STDOUT)</span>
+        <span class="s1">out</span><span class="s2">, </span><span class="s1">err = p.communicate()</span>
+        <span class="s2">if </span><span class="s1">p.returncode != </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">RuntimeError(</span><span class="s5">&quot;Running distutils build failed: %s</span><span class="s2">\n</span><span class="s5">%s&quot;</span>
+                               <span class="s1">% (cmd[</span><span class="s4">4</span><span class="s1">:]</span><span class="s2">, </span><span class="s1">asstr(out)))</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s1">os.chdir(cwd)</span>
+
+        <span class="s3"># Partial cleanup</span>
+        <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">dst_sources:</span>
+            <span class="s1">os.unlink(fn)</span>
+
+    <span class="s3"># Import</span>
+    <span class="s1">__import__(module_name)</span>
+    <span class="s2">return </span><span class="s1">sys.modules[module_name]</span>
+
+<span class="s3">#</span>
+<span class="s3"># Unittest convenience</span>
+<span class="s3">#</span>
+
+
+<span class="s2">class </span><span class="s1">F2PyTest:</span>
+    <span class="s1">code = </span><span class="s2">None</span>
+    <span class="s1">sources = </span><span class="s2">None</span>
+    <span class="s1">options = []</span>
+    <span class="s1">skip = []</span>
+    <span class="s1">only = []</span>
+    <span class="s1">suffix = </span><span class="s5">'.f'</span>
+    <span class="s1">module = </span><span class="s2">None</span>
+    <span class="s1">module_name = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">setup(self):</span>
+        <span class="s2">if </span><span class="s1">sys.platform == </span><span class="s5">'win32'</span><span class="s1">:</span>
+            <span class="s1">pytest.skip(</span><span class="s5">'Fails with MinGW64 Gfortran (Issue #9673)'</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.module </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s3"># Check compiler availability first</span>
+        <span class="s2">if not </span><span class="s1">has_c_compiler():</span>
+            <span class="s1">pytest.skip(</span><span class="s5">&quot;No C compiler available&quot;</span><span class="s1">)</span>
+
+        <span class="s1">codes = []</span>
+        <span class="s2">if </span><span class="s1">self.sources:</span>
+            <span class="s1">codes.extend(self.sources)</span>
+        <span class="s2">if </span><span class="s1">self.code </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">codes.append(self.suffix)</span>
+
+        <span class="s1">needs_f77 = </span><span class="s2">False</span>
+        <span class="s1">needs_f90 = </span><span class="s2">False</span>
+        <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">codes:</span>
+            <span class="s2">if </span><span class="s1">fn.endswith(</span><span class="s5">'.f'</span><span class="s1">):</span>
+                <span class="s1">needs_f77 = </span><span class="s2">True</span>
+            <span class="s2">elif </span><span class="s1">fn.endswith(</span><span class="s5">'.f90'</span><span class="s1">):</span>
+                <span class="s1">needs_f90 = </span><span class="s2">True</span>
+        <span class="s2">if </span><span class="s1">needs_f77 </span><span class="s2">and not </span><span class="s1">has_f77_compiler():</span>
+            <span class="s1">pytest.skip(</span><span class="s5">&quot;No Fortran 77 compiler available&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">needs_f90 </span><span class="s2">and not </span><span class="s1">has_f90_compiler():</span>
+            <span class="s1">pytest.skip(</span><span class="s5">&quot;No Fortran 90 compiler available&quot;</span><span class="s1">)</span>
+
+        <span class="s3"># Build the module</span>
+        <span class="s2">if </span><span class="s1">self.code </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self.module = build_code(self.code</span><span class="s2">, </span><span class="s1">options=self.options</span><span class="s2">,</span>
+                                     <span class="s1">skip=self.skip</span><span class="s2">, </span><span class="s1">only=self.only</span><span class="s2">,</span>
+                                     <span class="s1">suffix=self.suffix</span><span class="s2">,</span>
+                                     <span class="s1">module_name=self.module_name)</span>
+
+        <span class="s2">if </span><span class="s1">self.sources </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self.module = build_module(self.sources</span><span class="s2">, </span><span class="s1">options=self.options</span><span class="s2">,</span>
+                                       <span class="s1">skip=self.skip</span><span class="s2">, </span><span class="s1">only=self.only</span><span class="s2">,</span>
+                                       <span class="s1">module_name=self.module_name)</span>
+</pre>
+</body>
+</html>

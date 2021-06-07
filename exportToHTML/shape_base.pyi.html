@@ -1,0 +1,61 @@
+<html>
+<head>
+<title>shape_base.pyi</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6897bb;}
+.s3 { color: #6a8759;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+shape_base.pyi</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">TypeVar</span><span class="s0">, </span><span class="s1">overload</span><span class="s0">, </span><span class="s1">List</span><span class="s0">, </span><span class="s1">Sequence</span>
+
+<span class="s0">from </span><span class="s1">numpy </span><span class="s0">import </span><span class="s1">ndarray</span>
+<span class="s0">from </span><span class="s1">numpy.typing </span><span class="s0">import </span><span class="s1">ArrayLike</span>
+
+<span class="s0">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s2">3</span><span class="s0">, </span><span class="s2">8</span><span class="s1">):</span>
+    <span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">SupportsIndex</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Protocol</span>
+    <span class="s0">class </span><span class="s1">SupportsIndex(Protocol):</span>
+        <span class="s0">def </span><span class="s1">__index__(self) -&gt; int: ...</span>
+
+<span class="s1">_ArrayType = TypeVar(</span><span class="s3">&quot;_ArrayType&quot;</span><span class="s0">, </span><span class="s1">bound=ndarray)</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">atleast_1d(__arys: ArrayLike) -&gt; ndarray: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">atleast_1d(*arys: ArrayLike) -&gt; List[ndarray]: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">atleast_2d(__arys: ArrayLike) -&gt; ndarray: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">atleast_2d(*arys: ArrayLike) -&gt; List[ndarray]: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">atleast_3d(__arys: ArrayLike) -&gt; ndarray: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">atleast_3d(*arys: ArrayLike) -&gt; List[ndarray]: ...</span>
+
+<span class="s0">def </span><span class="s1">vstack(tup: Sequence[ArrayLike]) -&gt; ndarray: ...</span>
+<span class="s0">def </span><span class="s1">hstack(tup: Sequence[ArrayLike]) -&gt; ndarray: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">stack(</span>
+    <span class="s1">arrays: Sequence[ArrayLike]</span><span class="s0">, </span><span class="s1">axis: SupportsIndex = ...</span><span class="s0">, </span><span class="s1">out: </span><span class="s0">None </span><span class="s1">= ...</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">stack(</span>
+    <span class="s1">arrays: Sequence[ArrayLike]</span><span class="s0">, </span><span class="s1">axis: SupportsIndex = ...</span><span class="s0">, </span><span class="s1">out: _ArrayType = ...</span>
+<span class="s1">) -&gt; _ArrayType: ...</span>
+<span class="s0">def </span><span class="s1">block(arrays: ArrayLike) -&gt; ndarray: ...</span>
+</pre>
+</body>
+</html>

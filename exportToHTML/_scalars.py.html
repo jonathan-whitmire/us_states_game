@@ -1,0 +1,45 @@
+<html>
+<head>
+<title>_scalars.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_scalars.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span><span class="s0">, </span><span class="s1">Tuple</span><span class="s0">, </span><span class="s1">Any</span>
+
+<span class="s0">import </span><span class="s1">numpy </span><span class="s0">as </span><span class="s1">np</span>
+
+<span class="s2"># NOTE: `_StrLike` and `_BytesLike` are pointless, as `np.str_` and `np.bytes_`</span>
+<span class="s2"># are already subclasses of their builtin counterpart</span>
+
+<span class="s1">_CharLike = Union[str</span><span class="s0">, </span><span class="s1">bytes]</span>
+
+<span class="s1">_BoolLike = Union[bool</span><span class="s0">, </span><span class="s1">np.bool_]</span>
+<span class="s1">_IntLike = Union[int</span><span class="s0">, </span><span class="s1">np.integer]</span>
+<span class="s1">_FloatLike = Union[_IntLike</span><span class="s0">, </span><span class="s1">float</span><span class="s0">, </span><span class="s1">np.floating]</span>
+<span class="s1">_ComplexLike = Union[_FloatLike</span><span class="s0">, </span><span class="s1">complex</span><span class="s0">, </span><span class="s1">np.complexfloating]</span>
+<span class="s1">_NumberLike = Union[int</span><span class="s0">, </span><span class="s1">float</span><span class="s0">, </span><span class="s1">complex</span><span class="s0">, </span><span class="s1">np.number</span><span class="s0">, </span><span class="s1">np.bool_]</span>
+
+<span class="s1">_ScalarLike = Union[</span>
+    <span class="s1">int</span><span class="s0">,</span>
+    <span class="s1">float</span><span class="s0">,</span>
+    <span class="s1">complex</span><span class="s0">,</span>
+    <span class="s1">str</span><span class="s0">,</span>
+    <span class="s1">bytes</span><span class="s0">,</span>
+    <span class="s1">np.generic</span><span class="s0">,</span>
+<span class="s1">]</span>
+
+<span class="s2"># `_VoidLike` is technically not a scalar, but it's close enough</span>
+<span class="s1">_VoidLike = Union[Tuple[Any</span><span class="s0">, </span><span class="s1">...]</span><span class="s0">, </span><span class="s1">np.void]</span>
+</pre>
+</body>
+</html>

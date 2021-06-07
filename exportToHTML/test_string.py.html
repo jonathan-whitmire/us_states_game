@@ -1,0 +1,42 @@
+<html>
+<head>
+<title>test_string.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_string.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">pytest</span>
+
+<span class="s0">from </span><span class="s1">numpy.testing </span><span class="s0">import </span><span class="s1">assert_array_equal</span>
+<span class="s0">import </span><span class="s1">numpy </span><span class="s0">as </span><span class="s1">np</span>
+<span class="s0">from </span><span class="s1">. </span><span class="s0">import </span><span class="s1">util</span>
+
+
+<span class="s0">def </span><span class="s1">_path(*a):</span>
+    <span class="s0">return </span><span class="s1">os.path.join(*((os.path.dirname(__file__)</span><span class="s0">,</span><span class="s1">) + a))</span>
+
+<span class="s0">class </span><span class="s1">TestString(util.F2PyTest):</span>
+    <span class="s1">sources = [_path(</span><span class="s2">'src'</span><span class="s0">, </span><span class="s2">'string'</span><span class="s0">, </span><span class="s2">'char.f90'</span><span class="s1">)]</span>
+
+    <span class="s1">@pytest.mark.slow</span>
+    <span class="s0">def </span><span class="s1">test_char(self):</span>
+        <span class="s1">strings = np.array([</span><span class="s2">'ab'</span><span class="s0">, </span><span class="s2">'cd'</span><span class="s0">, </span><span class="s2">'ef'</span><span class="s1">]</span><span class="s0">, </span><span class="s1">dtype=</span><span class="s2">'c'</span><span class="s1">).T</span>
+        <span class="s1">inp</span><span class="s0">, </span><span class="s1">out = self.module.char_test.change_strings(strings</span><span class="s0">, </span><span class="s1">strings.shape[</span><span class="s3">1</span><span class="s1">])</span>
+        <span class="s1">assert_array_equal(inp</span><span class="s0">, </span><span class="s1">strings)</span>
+        <span class="s1">expected = strings.copy()</span>
+        <span class="s1">expected[</span><span class="s3">1</span><span class="s0">, </span><span class="s1">:] = </span><span class="s2">'AAA'</span>
+        <span class="s1">assert_array_equal(out</span><span class="s0">, </span><span class="s1">expected)</span>
+</pre>
+</body>
+</html>

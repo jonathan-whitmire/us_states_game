@@ -1,0 +1,60 @@
+<html>
+<head>
+<title>_array_like.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6897bb;}
+.s3 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_array_like.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span><span class="s0">, </span><span class="s1">overload</span><span class="s0">, </span><span class="s1">Sequence</span><span class="s0">, </span><span class="s1">TYPE_CHECKING</span><span class="s0">, </span><span class="s1">Union</span>
+
+<span class="s0">from </span><span class="s1">numpy </span><span class="s0">import </span><span class="s1">ndarray</span>
+<span class="s0">from </span><span class="s1">._scalars </span><span class="s0">import </span><span class="s1">_ScalarLike</span>
+<span class="s0">from </span><span class="s1">._dtype_like </span><span class="s0">import </span><span class="s1">DTypeLike</span>
+
+<span class="s0">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s2">3</span><span class="s0">, </span><span class="s2">8</span><span class="s1">):</span>
+    <span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Protocol</span>
+    <span class="s1">HAVE_PROTOCOL = </span><span class="s0">True</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">try</span><span class="s1">:</span>
+        <span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Protocol</span>
+    <span class="s0">except </span><span class="s1">ImportError:</span>
+        <span class="s1">HAVE_PROTOCOL = </span><span class="s0">False</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">HAVE_PROTOCOL = </span><span class="s0">True</span>
+
+<span class="s0">if </span><span class="s1">TYPE_CHECKING </span><span class="s0">or </span><span class="s1">HAVE_PROTOCOL:</span>
+    <span class="s0">class </span><span class="s1">_SupportsArray(Protocol):</span>
+        <span class="s1">@overload</span>
+        <span class="s0">def </span><span class="s1">__array__(self</span><span class="s0">, </span><span class="s1">__dtype: DTypeLike = ...) -&gt; ndarray: ...</span>
+        <span class="s1">@overload</span>
+        <span class="s0">def </span><span class="s1">__array__(self</span><span class="s0">, </span><span class="s1">dtype: DTypeLike = ...) -&gt; ndarray: ...</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s1">_SupportsArray = Any</span>
+
+<span class="s3"># TODO: support buffer protocols once</span>
+<span class="s3">#</span>
+<span class="s3"># https://bugs.python.org/issue27501</span>
+<span class="s3">#</span>
+<span class="s3"># is resolved. See also the mypy issue:</span>
+<span class="s3">#</span>
+<span class="s3"># https://github.com/python/typing/issues/593</span>
+<span class="s1">ArrayLike = Union[</span>
+    <span class="s1">_ScalarLike</span><span class="s0">,</span>
+    <span class="s1">Sequence[_ScalarLike]</span><span class="s0">,</span>
+    <span class="s1">Sequence[Sequence[Any]]</span><span class="s0">,  </span><span class="s3"># TODO: Wait for support for recursive types</span>
+    <span class="s1">_SupportsArray</span><span class="s0">,</span>
+<span class="s1">]</span>
+</pre>
+</body>
+</html>

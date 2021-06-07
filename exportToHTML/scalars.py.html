@@ -1,0 +1,49 @@
+<html>
+<head>
+<title>scalars.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6897bb;}
+.s3 { color: #808080;}
+.s4 { color: #6a8759;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+scalars.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">numpy </span><span class="s0">as </span><span class="s1">np</span>
+
+<span class="s1">x = np.complex64(</span><span class="s2">3 </span><span class="s1">+ </span><span class="s2">2j</span><span class="s1">)</span>
+
+<span class="s1">reveal_type(x.real)  </span><span class="s3"># E: numpy.floating[numpy.typing._32Bit]</span>
+<span class="s1">reveal_type(x.imag)  </span><span class="s3"># E: numpy.floating[numpy.typing._32Bit]</span>
+
+<span class="s1">reveal_type(x.real.real)  </span><span class="s3"># E: numpy.floating[numpy.typing._32Bit]</span>
+<span class="s1">reveal_type(x.real.imag)  </span><span class="s3"># E: numpy.floating[numpy.typing._32Bit]</span>
+
+<span class="s1">reveal_type(x.itemsize)  </span><span class="s3"># E: int</span>
+<span class="s1">reveal_type(x.shape)  </span><span class="s3"># E: Tuple[]</span>
+<span class="s1">reveal_type(x.strides)  </span><span class="s3"># E: Tuple[]</span>
+
+<span class="s1">reveal_type(x.ndim)  </span><span class="s3"># E: Literal[0]</span>
+<span class="s1">reveal_type(x.size)  </span><span class="s3"># E: Literal[1]</span>
+
+<span class="s1">reveal_type(x.squeeze())  </span><span class="s3"># E: numpy.complexfloating[numpy.typing._32Bit, numpy.typing._32Bit]</span>
+<span class="s1">reveal_type(x.byteswap())  </span><span class="s3"># E: numpy.complexfloating[numpy.typing._32Bit, numpy.typing._32Bit]</span>
+<span class="s1">reveal_type(x.transpose())  </span><span class="s3"># E: numpy.complexfloating[numpy.typing._32Bit, numpy.typing._32Bit]</span>
+
+<span class="s1">reveal_type(x.dtype)  </span><span class="s3"># E: numpy.dtype[numpy.complexfloating[numpy.typing._32Bit, numpy.typing._32Bit]]</span>
+
+<span class="s1">reveal_type(np.complex64().real)  </span><span class="s3"># E: numpy.floating[numpy.typing._32Bit]</span>
+<span class="s1">reveal_type(np.complex128().imag)  </span><span class="s3"># E: numpy.floating[numpy.typing._64Bit]</span>
+
+<span class="s1">reveal_type(np.unicode_(</span><span class="s4">'foo'</span><span class="s1">))  </span><span class="s3"># E: numpy.str_</span>
+<span class="s1">reveal_type(np.str0(</span><span class="s4">'foo'</span><span class="s1">))  </span><span class="s3"># E: numpy.str_</span>
+</pre>
+</body>
+</html>

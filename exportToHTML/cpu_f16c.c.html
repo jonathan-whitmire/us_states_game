@@ -1,0 +1,27 @@
+<html>
+<head>
+<title>cpu_f16c.c</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+cpu_f16c.c</font>
+</center></td></tr></table>
+<pre><span class="s0">#include </span><span class="s1">&lt;emmintrin.h&gt;</span>
+<span class="s0">#include </span><span class="s1">&lt;immintrin.h&gt;</span>
+
+<span class="s0">int </span><span class="s1">main(</span><span class="s0">void</span><span class="s1">)</span>
+<span class="s1">{</span>
+    <span class="s1">__m128 a  = _mm_cvtph_ps(_mm_setzero_si128());</span>
+    <span class="s1">__m256 a8 = _mm256_cvtph_ps(_mm_setzero_si128());</span>
+    <span class="s0">return </span><span class="s1">(</span><span class="s0">int</span><span class="s1">)(_mm_cvtss_f32(a) + _mm_cvtss_f32(_mm256_castps256_ps128(a8)));</span>
+<span class="s1">}</span>
+</pre>
+</body>
+</html>

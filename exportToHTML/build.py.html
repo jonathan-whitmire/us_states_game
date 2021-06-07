@@ -1,0 +1,82 @@
+<html>
+<head>
+<title>build.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #808080;}
+.s4 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+build.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">distutils.command.build </span><span class="s0">import </span><span class="s1">build </span><span class="s0">as </span><span class="s1">old_build</span>
+<span class="s0">from </span><span class="s1">distutils.util </span><span class="s0">import </span><span class="s1">get_platform</span>
+<span class="s0">from </span><span class="s1">numpy.distutils.command.config_compiler </span><span class="s0">import </span><span class="s1">show_fortran_compilers</span>
+
+<span class="s0">class </span><span class="s1">build(old_build):</span>
+
+    <span class="s1">sub_commands = [(</span><span class="s2">'config_cc'</span><span class="s0">,     lambda </span><span class="s1">*args: </span><span class="s0">True</span><span class="s1">)</span><span class="s0">,</span>
+                    <span class="s1">(</span><span class="s2">'config_fc'</span><span class="s0">,     lambda </span><span class="s1">*args: </span><span class="s0">True</span><span class="s1">)</span><span class="s0">,</span>
+                    <span class="s1">(</span><span class="s2">'build_src'</span><span class="s0">,     </span><span class="s1">old_build.has_ext_modules)</span><span class="s0">,</span>
+                    <span class="s1">] + old_build.sub_commands</span>
+
+    <span class="s1">user_options = old_build.user_options + [</span>
+        <span class="s1">(</span><span class="s2">'fcompiler='</span><span class="s0">, None,</span>
+         <span class="s2">&quot;specify the Fortran compiler type&quot;</span><span class="s1">)</span><span class="s0">,</span>
+        <span class="s1">(</span><span class="s2">'warn-error'</span><span class="s0">, None,</span>
+         <span class="s2">&quot;turn all warnings into errors (-Werror)&quot;</span><span class="s1">)</span><span class="s0">,</span>
+        <span class="s1">(</span><span class="s2">'cpu-baseline='</span><span class="s0">, None,</span>
+         <span class="s2">&quot;specify a list of enabled baseline CPU optimizations&quot;</span><span class="s1">)</span><span class="s0">,</span>
+        <span class="s1">(</span><span class="s2">'cpu-dispatch='</span><span class="s0">, None,</span>
+         <span class="s2">&quot;specify a list of dispatched CPU optimizations&quot;</span><span class="s1">)</span><span class="s0">,</span>
+        <span class="s1">(</span><span class="s2">'disable-optimization'</span><span class="s0">, None,</span>
+         <span class="s2">&quot;disable CPU optimized code(dispatch,simd,fast...)&quot;</span><span class="s1">)</span><span class="s0">,</span>
+        <span class="s1">(</span><span class="s2">'simd-test='</span><span class="s0">, None,</span>
+         <span class="s2">&quot;specify a list of CPU optimizations to be tested against NumPy SIMD interface&quot;</span><span class="s1">)</span><span class="s0">,</span>
+        <span class="s1">]</span>
+
+    <span class="s1">help_options = old_build.help_options + [</span>
+        <span class="s1">(</span><span class="s2">'help-fcompiler'</span><span class="s0">, None, </span><span class="s2">&quot;list available Fortran compilers&quot;</span><span class="s0">,</span>
+         <span class="s1">show_fortran_compilers)</span><span class="s0">,</span>
+        <span class="s1">]</span>
+
+    <span class="s0">def </span><span class="s1">initialize_options(self):</span>
+        <span class="s1">old_build.initialize_options(self)</span>
+        <span class="s1">self.fcompiler = </span><span class="s0">None</span>
+        <span class="s1">self.warn_error = </span><span class="s0">False</span>
+        <span class="s1">self.cpu_baseline = </span><span class="s2">&quot;min&quot;</span>
+        <span class="s1">self.cpu_dispatch = </span><span class="s2">&quot;max -xop -fma4&quot; </span><span class="s3"># drop AMD legacy features by default</span>
+        <span class="s1">self.disable_optimization = </span><span class="s0">False</span>
+        <span class="s2">&quot;&quot;&quot; 
+        the '_simd' module is a very large. Adding more dispatched features 
+        will increase binary size and compile time. By default we minimize 
+        the targeted features to those most commonly used by the NumPy SIMD interface(NPYV), 
+        NOTE: any specified features will be ignored if they're: 
+            - part of the baseline(--cpu-baseline) 
+            - not part of dispatch-able features(--cpu-dispatch) 
+            - not supported by compiler or platform 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.simd_test = </span><span class="s2">&quot;BASELINE SSE2 SSE42 XOP FMA4 (FMA3 AVX2) AVX512F AVX512_SKX VSX VSX2 VSX3 NEON ASIMD&quot;</span>
+
+    <span class="s0">def </span><span class="s1">finalize_options(self):</span>
+        <span class="s1">build_scripts = self.build_scripts</span>
+        <span class="s1">old_build.finalize_options(self)</span>
+        <span class="s1">plat_specifier = </span><span class="s2">&quot;.{}-{}.{}&quot;</span><span class="s1">.format(get_platform()</span><span class="s0">, </span><span class="s1">*sys.version_info[:</span><span class="s4">2</span><span class="s1">])</span>
+        <span class="s0">if </span><span class="s1">build_scripts </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.build_scripts = os.path.join(self.build_base</span><span class="s0">,</span>
+                                              <span class="s2">'scripts' </span><span class="s1">+ plat_specifier)</span>
+
+    <span class="s0">def </span><span class="s1">run(self):</span>
+        <span class="s1">old_build.run(self)</span>
+</pre>
+</body>
+</html>

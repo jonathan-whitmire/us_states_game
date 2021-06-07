@@ -1,0 +1,288 @@
+<html>
+<head>
+<title>ufunclike.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #cc7832;}
+.s4 { color: #808080;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+ufunclike.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Module of functions that are like ufuncs in acting on arrays and optionally 
+storing results in an output array. 
+ 
+&quot;&quot;&quot;</span>
+<span class="s1">__all__ = [</span><span class="s2">'fix'</span><span class="s3">, </span><span class="s2">'isneginf'</span><span class="s3">, </span><span class="s2">'isposinf'</span><span class="s1">]</span>
+
+<span class="s3">import </span><span class="s1">numpy.core.numeric </span><span class="s3">as </span><span class="s1">nx</span>
+<span class="s3">from </span><span class="s1">numpy.core.overrides </span><span class="s3">import </span><span class="s1">(</span>
+    <span class="s1">array_function_dispatch</span><span class="s3">, </span><span class="s1">ARRAY_FUNCTION_ENABLED</span><span class="s3">,</span>
+<span class="s1">)</span>
+<span class="s3">import </span><span class="s1">warnings</span>
+<span class="s3">import </span><span class="s1">functools</span>
+
+
+<span class="s3">def </span><span class="s1">_deprecate_out_named_y(f):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Allow the out argument to be passed as the name `y` (deprecated) 
+ 
+    In future, this decorator should be removed. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">@functools.wraps(f)</span>
+    <span class="s3">def </span><span class="s1">func(x</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None, </span><span class="s1">**kwargs):</span>
+        <span class="s3">if </span><span class="s2">'y' </span><span class="s3">in </span><span class="s1">kwargs:</span>
+            <span class="s3">if </span><span class="s2">'out' </span><span class="s3">in </span><span class="s1">kwargs:</span>
+                <span class="s3">raise </span><span class="s1">TypeError(</span>
+                    <span class="s2">&quot;{} got multiple values for argument 'out'/'y'&quot;</span>
+                    <span class="s1">.format(f.__name__)</span>
+                <span class="s1">)</span>
+            <span class="s1">out = kwargs.pop(</span><span class="s2">'y'</span><span class="s1">)</span>
+            <span class="s4"># NumPy 1.13.0, 2017-04-26</span>
+            <span class="s1">warnings.warn(</span>
+                <span class="s2">&quot;The name of the out argument to {} has changed from `y` to &quot;</span>
+                <span class="s2">&quot;`out`, to match other ufuncs.&quot;</span><span class="s1">.format(f.__name__)</span><span class="s3">,</span>
+                <span class="s1">DeprecationWarning</span><span class="s3">, </span><span class="s1">stacklevel=</span><span class="s5">3</span><span class="s1">)</span>
+        <span class="s3">return </span><span class="s1">f(x</span><span class="s3">, </span><span class="s1">out=out</span><span class="s3">, </span><span class="s1">**kwargs)</span>
+
+    <span class="s3">return </span><span class="s1">func</span>
+
+
+<span class="s3">def </span><span class="s1">_fix_out_named_y(f):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Allow the out argument to be passed as the name `y` (deprecated) 
+ 
+    This decorator should only be used if _deprecate_out_named_y is used on 
+    a corresponding dispatcher function. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">@functools.wraps(f)</span>
+    <span class="s3">def </span><span class="s1">func(x</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None, </span><span class="s1">**kwargs):</span>
+        <span class="s3">if </span><span class="s2">'y' </span><span class="s3">in </span><span class="s1">kwargs:</span>
+            <span class="s4"># we already did error checking in _deprecate_out_named_y</span>
+            <span class="s1">out = kwargs.pop(</span><span class="s2">'y'</span><span class="s1">)</span>
+        <span class="s3">return </span><span class="s1">f(x</span><span class="s3">, </span><span class="s1">out=out</span><span class="s3">, </span><span class="s1">**kwargs)</span>
+
+    <span class="s3">return </span><span class="s1">func</span>
+
+
+<span class="s3">def </span><span class="s1">_fix_and_maybe_deprecate_out_named_y(f):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Use the appropriate decorator, depending upon if dispatching is being used. 
+    &quot;&quot;&quot;</span>
+    <span class="s3">if </span><span class="s1">ARRAY_FUNCTION_ENABLED:</span>
+        <span class="s3">return </span><span class="s1">_fix_out_named_y(f)</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">_deprecate_out_named_y(f)</span>
+
+
+<span class="s1">@_deprecate_out_named_y</span>
+<span class="s3">def </span><span class="s1">_dispatcher(x</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">(x</span><span class="s3">, </span><span class="s1">out)</span>
+
+
+<span class="s1">@array_function_dispatch(_dispatcher</span><span class="s3">, </span><span class="s1">verify=</span><span class="s3">False, </span><span class="s1">module=</span><span class="s2">'numpy'</span><span class="s1">)</span>
+<span class="s1">@_fix_and_maybe_deprecate_out_named_y</span>
+<span class="s3">def </span><span class="s1">fix(x</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Round to nearest integer towards zero. 
+ 
+    Round an array of floats element-wise to nearest integer towards zero. 
+    The rounded values are returned as floats. 
+ 
+    Parameters 
+    ---------- 
+    x : array_like 
+        An array of floats to be rounded 
+    out : ndarray, optional 
+        A location into which the result is stored. If provided, it must have 
+        a shape that the input broadcasts to. If not provided or None, a 
+        freshly-allocated array is returned. 
+ 
+    Returns 
+    ------- 
+    out : ndarray of floats 
+        A float array with the same dimensions as the input. 
+        If second argument is not supplied then a float array is returned 
+        with the rounded values. 
+ 
+        If a second argument is supplied the result is stored there. 
+        The return value `out` is then a reference to that array. 
+ 
+    See Also 
+    -------- 
+    trunc, floor, ceil 
+    around : Round to given number of decimals 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; np.fix(3.14) 
+    3.0 
+    &gt;&gt;&gt; np.fix(3) 
+    3.0 
+    &gt;&gt;&gt; np.fix([2.1, 2.9, -2.1, -2.9]) 
+    array([ 2.,  2., -2., -2.]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s4"># promote back to an array if flattened</span>
+    <span class="s1">res = nx.asanyarray(nx.ceil(x</span><span class="s3">, </span><span class="s1">out=out))</span>
+    <span class="s1">res = nx.floor(x</span><span class="s3">, </span><span class="s1">out=res</span><span class="s3">, </span><span class="s1">where=nx.greater_equal(x</span><span class="s3">, </span><span class="s5">0</span><span class="s1">))</span>
+
+    <span class="s4"># when no out argument is passed and no subclasses are involved, flatten</span>
+    <span class="s4"># scalars</span>
+    <span class="s3">if </span><span class="s1">out </span><span class="s3">is None and </span><span class="s1">type(res) </span><span class="s3">is </span><span class="s1">nx.ndarray:</span>
+        <span class="s1">res = res[()]</span>
+    <span class="s3">return </span><span class="s1">res</span>
+
+
+<span class="s1">@array_function_dispatch(_dispatcher</span><span class="s3">, </span><span class="s1">verify=</span><span class="s3">False, </span><span class="s1">module=</span><span class="s2">'numpy'</span><span class="s1">)</span>
+<span class="s1">@_fix_and_maybe_deprecate_out_named_y</span>
+<span class="s3">def </span><span class="s1">isposinf(x</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Test element-wise for positive infinity, return result as bool array. 
+ 
+    Parameters 
+    ---------- 
+    x : array_like 
+        The input array. 
+    out : array_like, optional 
+        A location into which the result is stored. If provided, it must have a 
+        shape that the input broadcasts to. If not provided or None, a 
+        freshly-allocated boolean array is returned. 
+ 
+    Returns 
+    ------- 
+    out : ndarray 
+        A boolean array with the same dimensions as the input. 
+        If second argument is not supplied then a boolean array is returned 
+        with values True where the corresponding element of the input is 
+        positive infinity and values False where the element of the input is 
+        not positive infinity. 
+ 
+        If a second argument is supplied the result is stored there. If the 
+        type of that array is a numeric type the result is represented as zeros 
+        and ones, if the type is boolean then as False and True. 
+        The return value `out` is then a reference to that array. 
+ 
+    See Also 
+    -------- 
+    isinf, isneginf, isfinite, isnan 
+ 
+    Notes 
+    ----- 
+    NumPy uses the IEEE Standard for Binary Floating-Point for Arithmetic 
+    (IEEE 754). 
+ 
+    Errors result if the second argument is also supplied when x is a scalar 
+    input, if first and second arguments have different shapes, or if the 
+    first argument has complex values 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; np.isposinf(np.PINF) 
+    True 
+    &gt;&gt;&gt; np.isposinf(np.inf) 
+    True 
+    &gt;&gt;&gt; np.isposinf(np.NINF) 
+    False 
+    &gt;&gt;&gt; np.isposinf([-np.inf, 0., np.inf]) 
+    array([False, False,  True]) 
+ 
+    &gt;&gt;&gt; x = np.array([-np.inf, 0., np.inf]) 
+    &gt;&gt;&gt; y = np.array([2, 2, 2]) 
+    &gt;&gt;&gt; np.isposinf(x, y) 
+    array([0, 0, 1]) 
+    &gt;&gt;&gt; y 
+    array([0, 0, 1]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">is_inf = nx.isinf(x)</span>
+    <span class="s3">try</span><span class="s1">:</span>
+        <span class="s1">signbit = ~nx.signbit(x)</span>
+    <span class="s3">except </span><span class="s1">TypeError </span><span class="s3">as </span><span class="s1">e:</span>
+        <span class="s3">raise </span><span class="s1">TypeError(</span><span class="s2">'This operation is not supported for complex values '</span>
+                        <span class="s2">'because it would be ambiguous.'</span><span class="s1">) </span><span class="s3">from </span><span class="s1">e</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">nx.logical_and(is_inf</span><span class="s3">, </span><span class="s1">signbit</span><span class="s3">, </span><span class="s1">out)</span>
+
+
+<span class="s1">@array_function_dispatch(_dispatcher</span><span class="s3">, </span><span class="s1">verify=</span><span class="s3">False, </span><span class="s1">module=</span><span class="s2">'numpy'</span><span class="s1">)</span>
+<span class="s1">@_fix_and_maybe_deprecate_out_named_y</span>
+<span class="s3">def </span><span class="s1">isneginf(x</span><span class="s3">, </span><span class="s1">out=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Test element-wise for negative infinity, return result as bool array. 
+ 
+    Parameters 
+    ---------- 
+    x : array_like 
+        The input array. 
+    out : array_like, optional 
+        A location into which the result is stored. If provided, it must have a 
+        shape that the input broadcasts to. If not provided or None, a 
+        freshly-allocated boolean array is returned. 
+ 
+    Returns 
+    ------- 
+    out : ndarray 
+        A boolean array with the same dimensions as the input. 
+        If second argument is not supplied then a numpy boolean array is 
+        returned with values True where the corresponding element of the 
+        input is negative infinity and values False where the element of 
+        the input is not negative infinity. 
+ 
+        If a second argument is supplied the result is stored there. If the 
+        type of that array is a numeric type the result is represented as 
+        zeros and ones, if the type is boolean then as False and True. The 
+        return value `out` is then a reference to that array. 
+ 
+    See Also 
+    -------- 
+    isinf, isposinf, isnan, isfinite 
+ 
+    Notes 
+    ----- 
+    NumPy uses the IEEE Standard for Binary Floating-Point for Arithmetic 
+    (IEEE 754). 
+ 
+    Errors result if the second argument is also supplied when x is a scalar 
+    input, if first and second arguments have different shapes, or if the 
+    first argument has complex values. 
+ 
+    Examples 
+    -------- 
+    &gt;&gt;&gt; np.isneginf(np.NINF) 
+    True 
+    &gt;&gt;&gt; np.isneginf(np.inf) 
+    False 
+    &gt;&gt;&gt; np.isneginf(np.PINF) 
+    False 
+    &gt;&gt;&gt; np.isneginf([-np.inf, 0., np.inf]) 
+    array([ True, False, False]) 
+ 
+    &gt;&gt;&gt; x = np.array([-np.inf, 0., np.inf]) 
+    &gt;&gt;&gt; y = np.array([2, 2, 2]) 
+    &gt;&gt;&gt; np.isneginf(x, y) 
+    array([1, 0, 0]) 
+    &gt;&gt;&gt; y 
+    array([1, 0, 0]) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">is_inf = nx.isinf(x)</span>
+    <span class="s3">try</span><span class="s1">:</span>
+        <span class="s1">signbit = nx.signbit(x)</span>
+    <span class="s3">except </span><span class="s1">TypeError </span><span class="s3">as </span><span class="s1">e:</span>
+        <span class="s3">raise </span><span class="s1">TypeError(</span><span class="s2">'This operation is not supported for complex values '</span>
+                        <span class="s2">'because it would be ambiguous.'</span><span class="s1">) </span><span class="s3">from </span><span class="s1">e</span>
+    <span class="s3">else</span><span class="s1">:</span>
+        <span class="s3">return </span><span class="s1">nx.logical_and(is_inf</span><span class="s3">, </span><span class="s1">signbit</span><span class="s3">, </span><span class="s1">out)</span>
+</pre>
+</body>
+</html>

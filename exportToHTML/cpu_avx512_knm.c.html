@@ -1,0 +1,36 @@
+<html>
+<head>
+<title>cpu_avx512_knm.c</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+cpu_avx512_knm.c</font>
+</center></td></tr></table>
+<pre><span class="s0">#include </span><span class="s1">&lt;immintrin.h&gt;</span>
+
+<span class="s0">int </span><span class="s1">main(</span><span class="s0">void</span><span class="s1">)</span>
+<span class="s1">{</span>
+    <span class="s1">__m512i a = _mm512_setzero_si512();</span>
+    <span class="s1">__m512 b = _mm512_setzero_ps();</span>
+
+    <span class="s2">/* 4FMAPS */</span>
+    <span class="s1">b = _mm512_4fmadd_ps(b, b, b, b, b, NULL);</span>
+    <span class="s2">/* 4VNNIW */</span>
+    <span class="s1">a = _mm512_4dpwssd_epi32(a, a, a, a, a, NULL);</span>
+    <span class="s2">/* VPOPCNTDQ */</span>
+    <span class="s1">a = _mm512_popcnt_epi64(a);</span>
+
+    <span class="s1">a = _mm512_add_epi32(a, _mm512_castps_si512(b));</span>
+    <span class="s0">return </span><span class="s1">_mm_cvtsi128_si32(_mm512_castsi512_si128(a));</span>
+<span class="s1">}</span>
+</pre>
+</body>
+</html>

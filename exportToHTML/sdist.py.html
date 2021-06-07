@@ -1,0 +1,47 @@
+<html>
+<head>
+<title>sdist.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+sdist.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">if </span><span class="s2">'setuptools' </span><span class="s0">in </span><span class="s1">sys.modules:</span>
+    <span class="s0">from </span><span class="s1">setuptools.command.sdist </span><span class="s0">import </span><span class="s1">sdist </span><span class="s0">as </span><span class="s1">old_sdist</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">from </span><span class="s1">distutils.command.sdist </span><span class="s0">import </span><span class="s1">sdist </span><span class="s0">as </span><span class="s1">old_sdist</span>
+
+<span class="s0">from </span><span class="s1">numpy.distutils.misc_util </span><span class="s0">import </span><span class="s1">get_data_files</span>
+
+<span class="s0">class </span><span class="s1">sdist(old_sdist):</span>
+
+    <span class="s0">def </span><span class="s1">add_defaults (self):</span>
+        <span class="s1">old_sdist.add_defaults(self)</span>
+
+        <span class="s1">dist = self.distribution</span>
+
+        <span class="s0">if </span><span class="s1">dist.has_data_files():</span>
+            <span class="s0">for </span><span class="s1">data </span><span class="s0">in </span><span class="s1">dist.data_files:</span>
+                <span class="s1">self.filelist.extend(get_data_files(data))</span>
+
+        <span class="s0">if </span><span class="s1">dist.has_headers():</span>
+            <span class="s1">headers = []</span>
+            <span class="s0">for </span><span class="s1">h </span><span class="s0">in </span><span class="s1">dist.headers:</span>
+                <span class="s0">if </span><span class="s1">isinstance(h</span><span class="s0">, </span><span class="s1">str): headers.append(h)</span>
+                <span class="s0">else</span><span class="s1">: headers.append(h[</span><span class="s3">1</span><span class="s1">])</span>
+            <span class="s1">self.filelist.extend(headers)</span>
+
+        <span class="s0">return</span>
+</pre>
+</body>
+</html>

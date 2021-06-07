@@ -1,0 +1,700 @@
+<html>
+<head>
+<title>build_ext.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6a8759;}
+.s4 { color: #808080;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+build_ext.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; Modified version of build_ext that handles fortran source files. 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">subprocess</span>
+<span class="s2">from </span><span class="s1">glob </span><span class="s2">import </span><span class="s1">glob</span>
+
+<span class="s2">from </span><span class="s1">distutils.dep_util </span><span class="s2">import </span><span class="s1">newer_group</span>
+<span class="s2">from </span><span class="s1">distutils.command.build_ext </span><span class="s2">import </span><span class="s1">build_ext </span><span class="s2">as </span><span class="s1">old_build_ext</span>
+<span class="s2">from </span><span class="s1">distutils.errors </span><span class="s2">import </span><span class="s1">DistutilsFileError</span><span class="s2">, </span><span class="s1">DistutilsSetupError</span><span class="s2">,</span><span class="s1">\</span>
+    <span class="s1">DistutilsError</span>
+<span class="s2">from </span><span class="s1">distutils.file_util </span><span class="s2">import </span><span class="s1">copy_file</span>
+
+<span class="s2">from </span><span class="s1">numpy.distutils </span><span class="s2">import </span><span class="s1">log</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.exec_command </span><span class="s2">import </span><span class="s1">filepath_from_subprocess_output</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.system_info </span><span class="s2">import </span><span class="s1">combine_paths</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.misc_util </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">filter_sources</span><span class="s2">, </span><span class="s1">get_ext_source_files</span><span class="s2">, </span><span class="s1">get_numpy_include_dirs</span><span class="s2">,</span>
+    <span class="s1">has_cxx_sources</span><span class="s2">, </span><span class="s1">has_f_sources</span><span class="s2">, </span><span class="s1">is_sequence</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.command.config_compiler </span><span class="s2">import </span><span class="s1">show_fortran_compilers</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.ccompiler_opt </span><span class="s2">import </span><span class="s1">new_ccompiler_opt</span><span class="s2">, </span><span class="s1">CCompilerOpt</span>
+
+<span class="s2">class </span><span class="s1">build_ext (old_build_ext):</span>
+
+    <span class="s1">description = </span><span class="s3">&quot;build C/C++/F extensions (compile/link to build directory)&quot;</span>
+
+    <span class="s1">user_options = old_build_ext.user_options + [</span>
+        <span class="s1">(</span><span class="s3">'fcompiler='</span><span class="s2">, None,</span>
+         <span class="s3">&quot;specify the Fortran compiler type&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s3">'parallel='</span><span class="s2">, </span><span class="s3">'j'</span><span class="s2">,</span>
+         <span class="s3">&quot;number of parallel jobs&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s3">'warn-error'</span><span class="s2">, None,</span>
+         <span class="s3">&quot;turn all warnings into errors (-Werror)&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s3">'cpu-baseline='</span><span class="s2">, None,</span>
+         <span class="s3">&quot;specify a list of enabled baseline CPU optimizations&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s3">'cpu-dispatch='</span><span class="s2">, None,</span>
+         <span class="s3">&quot;specify a list of dispatched CPU optimizations&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s3">'disable-optimization'</span><span class="s2">, None,</span>
+         <span class="s3">&quot;disable CPU optimized code(dispatch,simd,fast...)&quot;</span><span class="s1">)</span><span class="s2">,</span>
+        <span class="s1">(</span><span class="s3">'simd-test='</span><span class="s2">, None,</span>
+         <span class="s3">&quot;specify a list of CPU optimizations to be tested against NumPy SIMD interface&quot;</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">]</span>
+
+    <span class="s1">help_options = old_build_ext.help_options + [</span>
+        <span class="s1">(</span><span class="s3">'help-fcompiler'</span><span class="s2">, None, </span><span class="s3">&quot;list available Fortran compilers&quot;</span><span class="s2">,</span>
+         <span class="s1">show_fortran_compilers)</span><span class="s2">,</span>
+    <span class="s1">]</span>
+
+    <span class="s1">boolean_options = old_build_ext.boolean_options + [</span><span class="s3">'warn-error'</span><span class="s2">, </span><span class="s3">'disable-optimization'</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">initialize_options(self):</span>
+        <span class="s1">old_build_ext.initialize_options(self)</span>
+        <span class="s1">self.fcompiler = </span><span class="s2">None</span>
+        <span class="s1">self.parallel = </span><span class="s2">None</span>
+        <span class="s1">self.warn_error = </span><span class="s2">None</span>
+        <span class="s1">self.cpu_baseline = </span><span class="s2">None</span>
+        <span class="s1">self.cpu_dispatch = </span><span class="s2">None</span>
+        <span class="s1">self.disable_optimization = </span><span class="s2">None</span>
+        <span class="s1">self.simd_test = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">finalize_options(self):</span>
+        <span class="s2">if </span><span class="s1">self.parallel:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self.parallel = int(self.parallel)</span>
+            <span class="s2">except </span><span class="s1">ValueError </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;--parallel/-j argument must be an integer&quot;</span><span class="s1">) </span><span class="s2">from </span><span class="s1">e</span>
+
+        <span class="s4"># Ensure that self.include_dirs and self.distribution.include_dirs</span>
+        <span class="s4"># refer to the same list object. finalize_options will modify</span>
+        <span class="s4"># self.include_dirs, but self.distribution.include_dirs is used</span>
+        <span class="s4"># during the actual build.</span>
+        <span class="s4"># self.include_dirs is None unless paths are specified with</span>
+        <span class="s4"># --include-dirs.</span>
+        <span class="s4"># The include paths will be passed to the compiler in the order:</span>
+        <span class="s4"># numpy paths, --include-dirs paths, Python include path.</span>
+        <span class="s2">if </span><span class="s1">isinstance(self.include_dirs</span><span class="s2">, </span><span class="s1">str):</span>
+            <span class="s1">self.include_dirs = self.include_dirs.split(os.pathsep)</span>
+        <span class="s1">incl_dirs = self.include_dirs </span><span class="s2">or </span><span class="s1">[]</span>
+        <span class="s2">if </span><span class="s1">self.distribution.include_dirs </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.distribution.include_dirs = []</span>
+        <span class="s1">self.include_dirs = self.distribution.include_dirs</span>
+        <span class="s1">self.include_dirs.extend(incl_dirs)</span>
+
+        <span class="s1">old_build_ext.finalize_options(self)</span>
+        <span class="s1">self.set_undefined_options(</span><span class="s3">'build'</span><span class="s2">,</span>
+                                        <span class="s1">(</span><span class="s3">'parallel'</span><span class="s2">, </span><span class="s3">'parallel'</span><span class="s1">)</span><span class="s2">,</span>
+                                        <span class="s1">(</span><span class="s3">'warn_error'</span><span class="s2">, </span><span class="s3">'warn_error'</span><span class="s1">)</span><span class="s2">,</span>
+                                        <span class="s1">(</span><span class="s3">'cpu_baseline'</span><span class="s2">, </span><span class="s3">'cpu_baseline'</span><span class="s1">)</span><span class="s2">,</span>
+                                        <span class="s1">(</span><span class="s3">'cpu_dispatch'</span><span class="s2">, </span><span class="s3">'cpu_dispatch'</span><span class="s1">)</span><span class="s2">,</span>
+                                        <span class="s1">(</span><span class="s3">'disable_optimization'</span><span class="s2">, </span><span class="s3">'disable_optimization'</span><span class="s1">)</span><span class="s2">,</span>
+                                        <span class="s1">(</span><span class="s3">'simd_test'</span><span class="s2">, </span><span class="s3">'simd_test'</span><span class="s1">)</span>
+                                  <span class="s1">)</span>
+        <span class="s1">CCompilerOpt.conf_target_groups[</span><span class="s3">&quot;simd_test&quot;</span><span class="s1">] = self.simd_test</span>
+
+    <span class="s2">def </span><span class="s1">run(self):</span>
+        <span class="s2">if not </span><span class="s1">self.extensions:</span>
+            <span class="s2">return</span>
+
+        <span class="s4"># Make sure that extension sources are complete.</span>
+        <span class="s1">self.run_command(</span><span class="s3">'build_src'</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.distribution.has_c_libraries():</span>
+            <span class="s2">if </span><span class="s1">self.inplace:</span>
+                <span class="s2">if </span><span class="s1">self.distribution.have_run.get(</span><span class="s3">'build_clib'</span><span class="s1">):</span>
+                    <span class="s1">log.warn(</span><span class="s3">'build_clib already run, it is too late to '</span>
+                             <span class="s3">'ensure in-place build of build_clib'</span><span class="s1">)</span>
+                    <span class="s1">build_clib = self.distribution.get_command_obj(</span>
+                        <span class="s3">'build_clib'</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">build_clib = self.distribution.get_command_obj(</span>
+                        <span class="s3">'build_clib'</span><span class="s1">)</span>
+                    <span class="s1">build_clib.inplace = </span><span class="s5">1</span>
+                    <span class="s1">build_clib.ensure_finalized()</span>
+                    <span class="s1">build_clib.run()</span>
+                    <span class="s1">self.distribution.have_run[</span><span class="s3">'build_clib'</span><span class="s1">] = </span><span class="s5">1</span>
+
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.run_command(</span><span class="s3">'build_clib'</span><span class="s1">)</span>
+                <span class="s1">build_clib = self.get_finalized_command(</span><span class="s3">'build_clib'</span><span class="s1">)</span>
+            <span class="s1">self.library_dirs.append(build_clib.build_clib)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">build_clib = </span><span class="s2">None</span>
+
+        <span class="s4"># Not including C libraries to the list of</span>
+        <span class="s4"># extension libraries automatically to prevent</span>
+        <span class="s4"># bogus linking commands. Extensions must</span>
+        <span class="s4"># explicitly specify the C libraries that they use.</span>
+
+        <span class="s2">from </span><span class="s1">distutils.ccompiler </span><span class="s2">import </span><span class="s1">new_compiler</span>
+        <span class="s2">from </span><span class="s1">numpy.distutils.fcompiler </span><span class="s2">import </span><span class="s1">new_fcompiler</span>
+
+        <span class="s1">compiler_type = self.compiler</span>
+        <span class="s4"># Initialize C compiler:</span>
+        <span class="s1">self.compiler = new_compiler(compiler=compiler_type</span><span class="s2">,</span>
+                                     <span class="s1">verbose=self.verbose</span><span class="s2">,</span>
+                                     <span class="s1">dry_run=self.dry_run</span><span class="s2">,</span>
+                                     <span class="s1">force=self.force)</span>
+        <span class="s1">self.compiler.customize(self.distribution)</span>
+        <span class="s1">self.compiler.customize_cmd(self)</span>
+
+        <span class="s2">if </span><span class="s1">self.warn_error:</span>
+            <span class="s1">self.compiler.compiler.append(</span><span class="s3">'-Werror'</span><span class="s1">)</span>
+            <span class="s1">self.compiler.compiler_so.append(</span><span class="s3">'-Werror'</span><span class="s1">)</span>
+
+        <span class="s1">self.compiler.show_customization()</span>
+
+        <span class="s2">if not </span><span class="s1">self.disable_optimization:</span>
+            <span class="s1">dispatch_hpath = os.path.join(</span><span class="s3">&quot;numpy&quot;</span><span class="s2">, </span><span class="s3">&quot;distutils&quot;</span><span class="s2">, </span><span class="s3">&quot;include&quot;</span><span class="s2">, </span><span class="s3">&quot;npy_cpu_dispatch_config.h&quot;</span><span class="s1">)</span>
+            <span class="s1">dispatch_hpath = os.path.join(self.get_finalized_command(</span><span class="s3">&quot;build_src&quot;</span><span class="s1">).build_src</span><span class="s2">, </span><span class="s1">dispatch_hpath)</span>
+            <span class="s1">opt_cache_path = os.path.abspath(</span>
+                <span class="s1">os.path.join(self.build_temp</span><span class="s2">, </span><span class="s3">'ccompiler_opt_cache_ext.py'</span><span class="s1">)</span>
+            <span class="s1">)</span>
+            <span class="s1">self.compiler_opt = new_ccompiler_opt(</span>
+                <span class="s1">compiler=self.compiler</span><span class="s2">, </span><span class="s1">dispatch_hpath=dispatch_hpath</span><span class="s2">,</span>
+                <span class="s1">cpu_baseline=self.cpu_baseline</span><span class="s2">, </span><span class="s1">cpu_dispatch=self.cpu_dispatch</span><span class="s2">,</span>
+                <span class="s1">cache_path=opt_cache_path</span>
+            <span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">self.compiler_opt.is_cached():</span>
+                <span class="s1">log.info(</span><span class="s3">&quot;Detected changes on compiler optimizations, force rebuilding&quot;</span><span class="s1">)</span>
+                <span class="s1">self.force = </span><span class="s2">True</span>
+
+            <span class="s2">import </span><span class="s1">atexit</span>
+            <span class="s2">def </span><span class="s1">report():</span>
+                <span class="s1">log.info(</span><span class="s3">&quot;</span><span class="s2">\n</span><span class="s3">########### EXT COMPILER OPTIMIZATION ###########&quot;</span><span class="s1">)</span>
+                <span class="s1">log.info(self.compiler_opt.report(full=</span><span class="s2">True</span><span class="s1">))</span>
+            <span class="s1">atexit.register(report)</span>
+
+        <span class="s4"># Setup directory for storing generated extra DLL files on Windows</span>
+        <span class="s1">self.extra_dll_dir = os.path.join(self.build_temp</span><span class="s2">, </span><span class="s3">'.libs'</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">os.path.isdir(self.extra_dll_dir):</span>
+            <span class="s1">os.makedirs(self.extra_dll_dir)</span>
+
+        <span class="s4"># Create mapping of libraries built by build_clib:</span>
+        <span class="s1">clibs = {}</span>
+        <span class="s2">if </span><span class="s1">build_clib </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">libname</span><span class="s2">, </span><span class="s1">build_info </span><span class="s2">in </span><span class="s1">build_clib.libraries </span><span class="s2">or </span><span class="s1">[]:</span>
+                <span class="s2">if </span><span class="s1">libname </span><span class="s2">in </span><span class="s1">clibs </span><span class="s2">and </span><span class="s1">clibs[libname] != build_info:</span>
+                    <span class="s1">log.warn(</span><span class="s3">'library %r defined more than once,'</span>
+                             <span class="s3">' overwriting build_info</span><span class="s2">\n</span><span class="s3">%s... </span><span class="s2">\n</span><span class="s3">with</span><span class="s2">\n</span><span class="s3">%s...'</span>
+                             <span class="s1">% (libname</span><span class="s2">, </span><span class="s1">repr(clibs[libname])[:</span><span class="s5">300</span><span class="s1">]</span><span class="s2">, </span><span class="s1">repr(build_info)[:</span><span class="s5">300</span><span class="s1">]))</span>
+                <span class="s1">clibs[libname] = build_info</span>
+        <span class="s4"># .. and distribution libraries:</span>
+        <span class="s2">for </span><span class="s1">libname</span><span class="s2">, </span><span class="s1">build_info </span><span class="s2">in </span><span class="s1">self.distribution.libraries </span><span class="s2">or </span><span class="s1">[]:</span>
+            <span class="s2">if </span><span class="s1">libname </span><span class="s2">in </span><span class="s1">clibs:</span>
+                <span class="s4"># build_clib libraries have a precedence before distribution ones</span>
+                <span class="s2">continue</span>
+            <span class="s1">clibs[libname] = build_info</span>
+
+        <span class="s4"># Determine if C++/Fortran 77/Fortran 90 compilers are needed.</span>
+        <span class="s4"># Update extension libraries, library_dirs, and macros.</span>
+        <span class="s1">all_languages = set()</span>
+        <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">self.extensions:</span>
+            <span class="s1">ext_languages = set()</span>
+            <span class="s1">c_libs = []</span>
+            <span class="s1">c_lib_dirs = []</span>
+            <span class="s1">macros = []</span>
+            <span class="s2">for </span><span class="s1">libname </span><span class="s2">in </span><span class="s1">ext.libraries:</span>
+                <span class="s2">if </span><span class="s1">libname </span><span class="s2">in </span><span class="s1">clibs:</span>
+                    <span class="s1">binfo = clibs[libname]</span>
+                    <span class="s1">c_libs += binfo.get(</span><span class="s3">'libraries'</span><span class="s2">, </span><span class="s1">[])</span>
+                    <span class="s1">c_lib_dirs += binfo.get(</span><span class="s3">'library_dirs'</span><span class="s2">, </span><span class="s1">[])</span>
+                    <span class="s2">for </span><span class="s1">m </span><span class="s2">in </span><span class="s1">binfo.get(</span><span class="s3">'macros'</span><span class="s2">, </span><span class="s1">[]):</span>
+                        <span class="s2">if </span><span class="s1">m </span><span class="s2">not in </span><span class="s1">macros:</span>
+                            <span class="s1">macros.append(m)</span>
+
+                <span class="s2">for </span><span class="s1">l </span><span class="s2">in </span><span class="s1">clibs.get(libname</span><span class="s2">, </span><span class="s1">{}).get(</span><span class="s3">'source_languages'</span><span class="s2">, </span><span class="s1">[]):</span>
+                    <span class="s1">ext_languages.add(l)</span>
+            <span class="s2">if </span><span class="s1">c_libs:</span>
+                <span class="s1">new_c_libs = ext.libraries + c_libs</span>
+                <span class="s1">log.info(</span><span class="s3">'updating extension %r libraries from %r to %r'</span>
+                         <span class="s1">% (ext.name</span><span class="s2">, </span><span class="s1">ext.libraries</span><span class="s2">, </span><span class="s1">new_c_libs))</span>
+                <span class="s1">ext.libraries = new_c_libs</span>
+                <span class="s1">ext.library_dirs = ext.library_dirs + c_lib_dirs</span>
+            <span class="s2">if </span><span class="s1">macros:</span>
+                <span class="s1">log.info(</span><span class="s3">'extending extension %r defined_macros with %r'</span>
+                         <span class="s1">% (ext.name</span><span class="s2">, </span><span class="s1">macros))</span>
+                <span class="s1">ext.define_macros = ext.define_macros + macros</span>
+
+            <span class="s4"># determine extension languages</span>
+            <span class="s2">if </span><span class="s1">has_f_sources(ext.sources):</span>
+                <span class="s1">ext_languages.add(</span><span class="s3">'f77'</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">has_cxx_sources(ext.sources):</span>
+                <span class="s1">ext_languages.add(</span><span class="s3">'c++'</span><span class="s1">)</span>
+            <span class="s1">l = ext.language </span><span class="s2">or </span><span class="s1">self.compiler.detect_language(ext.sources)</span>
+            <span class="s2">if </span><span class="s1">l:</span>
+                <span class="s1">ext_languages.add(l)</span>
+            <span class="s4"># reset language attribute for choosing proper linker</span>
+            <span class="s2">if </span><span class="s3">'c++' </span><span class="s2">in </span><span class="s1">ext_languages:</span>
+                <span class="s1">ext_language = </span><span class="s3">'c++'</span>
+            <span class="s2">elif </span><span class="s3">'f90' </span><span class="s2">in </span><span class="s1">ext_languages:</span>
+                <span class="s1">ext_language = </span><span class="s3">'f90'</span>
+            <span class="s2">elif </span><span class="s3">'f77' </span><span class="s2">in </span><span class="s1">ext_languages:</span>
+                <span class="s1">ext_language = </span><span class="s3">'f77'</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">ext_language = </span><span class="s3">'c'  </span><span class="s4"># default</span>
+            <span class="s2">if </span><span class="s1">l </span><span class="s2">and </span><span class="s1">l != ext_language </span><span class="s2">and </span><span class="s1">ext.language:</span>
+                <span class="s1">log.warn(</span><span class="s3">'resetting extension %r language from %r to %r.' </span><span class="s1">%</span>
+                         <span class="s1">(ext.name</span><span class="s2">, </span><span class="s1">l</span><span class="s2">, </span><span class="s1">ext_language))</span>
+            <span class="s1">ext.language = ext_language</span>
+            <span class="s4"># global language</span>
+            <span class="s1">all_languages.update(ext_languages)</span>
+
+        <span class="s1">need_f90_compiler = </span><span class="s3">'f90' </span><span class="s2">in </span><span class="s1">all_languages</span>
+        <span class="s1">need_f77_compiler = </span><span class="s3">'f77' </span><span class="s2">in </span><span class="s1">all_languages</span>
+        <span class="s1">need_cxx_compiler = </span><span class="s3">'c++' </span><span class="s2">in </span><span class="s1">all_languages</span>
+
+        <span class="s4"># Initialize C++ compiler:</span>
+        <span class="s2">if </span><span class="s1">need_cxx_compiler:</span>
+            <span class="s1">self._cxx_compiler = new_compiler(compiler=compiler_type</span><span class="s2">,</span>
+                                              <span class="s1">verbose=self.verbose</span><span class="s2">,</span>
+                                              <span class="s1">dry_run=self.dry_run</span><span class="s2">,</span>
+                                              <span class="s1">force=self.force)</span>
+            <span class="s1">compiler = self._cxx_compiler</span>
+            <span class="s1">compiler.customize(self.distribution</span><span class="s2">, </span><span class="s1">need_cxx=need_cxx_compiler)</span>
+            <span class="s1">compiler.customize_cmd(self)</span>
+            <span class="s1">compiler.show_customization()</span>
+            <span class="s1">self._cxx_compiler = compiler.cxx_compiler()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._cxx_compiler = </span><span class="s2">None</span>
+
+        <span class="s4"># Initialize Fortran 77 compiler:</span>
+        <span class="s2">if </span><span class="s1">need_f77_compiler:</span>
+            <span class="s1">ctype = self.fcompiler</span>
+            <span class="s1">self._f77_compiler = new_fcompiler(compiler=self.fcompiler</span><span class="s2">,</span>
+                                               <span class="s1">verbose=self.verbose</span><span class="s2">,</span>
+                                               <span class="s1">dry_run=self.dry_run</span><span class="s2">,</span>
+                                               <span class="s1">force=self.force</span><span class="s2">,</span>
+                                               <span class="s1">requiref90=</span><span class="s2">False,</span>
+                                               <span class="s1">c_compiler=self.compiler)</span>
+            <span class="s1">fcompiler = self._f77_compiler</span>
+            <span class="s2">if </span><span class="s1">fcompiler:</span>
+                <span class="s1">ctype = fcompiler.compiler_type</span>
+                <span class="s1">fcompiler.customize(self.distribution)</span>
+            <span class="s2">if </span><span class="s1">fcompiler </span><span class="s2">and </span><span class="s1">fcompiler.get_version():</span>
+                <span class="s1">fcompiler.customize_cmd(self)</span>
+                <span class="s1">fcompiler.show_customization()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.warn(</span><span class="s3">'f77_compiler=%s is not available.' </span><span class="s1">%</span>
+                          <span class="s1">(ctype))</span>
+                <span class="s1">self._f77_compiler = </span><span class="s2">None</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._f77_compiler = </span><span class="s2">None</span>
+
+        <span class="s4"># Initialize Fortran 90 compiler:</span>
+        <span class="s2">if </span><span class="s1">need_f90_compiler:</span>
+            <span class="s1">ctype = self.fcompiler</span>
+            <span class="s1">self._f90_compiler = new_fcompiler(compiler=self.fcompiler</span><span class="s2">,</span>
+                                               <span class="s1">verbose=self.verbose</span><span class="s2">,</span>
+                                               <span class="s1">dry_run=self.dry_run</span><span class="s2">,</span>
+                                               <span class="s1">force=self.force</span><span class="s2">,</span>
+                                               <span class="s1">requiref90=</span><span class="s2">True,</span>
+                                               <span class="s1">c_compiler=self.compiler)</span>
+            <span class="s1">fcompiler = self._f90_compiler</span>
+            <span class="s2">if </span><span class="s1">fcompiler:</span>
+                <span class="s1">ctype = fcompiler.compiler_type</span>
+                <span class="s1">fcompiler.customize(self.distribution)</span>
+            <span class="s2">if </span><span class="s1">fcompiler </span><span class="s2">and </span><span class="s1">fcompiler.get_version():</span>
+                <span class="s1">fcompiler.customize_cmd(self)</span>
+                <span class="s1">fcompiler.show_customization()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.warn(</span><span class="s3">'f90_compiler=%s is not available.' </span><span class="s1">%</span>
+                          <span class="s1">(ctype))</span>
+                <span class="s1">self._f90_compiler = </span><span class="s2">None</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._f90_compiler = </span><span class="s2">None</span>
+
+        <span class="s4"># Build extensions</span>
+        <span class="s1">self.build_extensions()</span>
+
+        <span class="s4"># Copy over any extra DLL files</span>
+        <span class="s4"># FIXME: In the case where there are more than two packages,</span>
+        <span class="s4"># we blindly assume that both packages need all of the libraries,</span>
+        <span class="s4"># resulting in a larger wheel than is required. This should be fixed,</span>
+        <span class="s4"># but it's so rare that I won't bother to handle it.</span>
+        <span class="s1">pkg_roots = {</span>
+            <span class="s1">self.get_ext_fullname(ext.name).split(</span><span class="s3">'.'</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]</span>
+            <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">self.extensions</span>
+        <span class="s1">}</span>
+        <span class="s2">for </span><span class="s1">pkg_root </span><span class="s2">in </span><span class="s1">pkg_roots:</span>
+            <span class="s1">shared_lib_dir = os.path.join(pkg_root</span><span class="s2">, </span><span class="s3">'.libs'</span><span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">self.inplace:</span>
+                <span class="s1">shared_lib_dir = os.path.join(self.build_lib</span><span class="s2">, </span><span class="s1">shared_lib_dir)</span>
+            <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">os.listdir(self.extra_dll_dir):</span>
+                <span class="s2">if not </span><span class="s1">os.path.isdir(shared_lib_dir):</span>
+                    <span class="s1">os.makedirs(shared_lib_dir)</span>
+                <span class="s2">if not </span><span class="s1">fn.lower().endswith(</span><span class="s3">'.dll'</span><span class="s1">):</span>
+                    <span class="s2">continue</span>
+                <span class="s1">runtime_lib = os.path.join(self.extra_dll_dir</span><span class="s2">, </span><span class="s1">fn)</span>
+                <span class="s1">copy_file(runtime_lib</span><span class="s2">, </span><span class="s1">shared_lib_dir)</span>
+
+    <span class="s2">def </span><span class="s1">swig_sources(self</span><span class="s2">, </span><span class="s1">sources</span><span class="s2">, </span><span class="s1">extensions=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s4"># Do nothing. Swig sources have been handled in build_src command.</span>
+        <span class="s2">return </span><span class="s1">sources</span>
+
+    <span class="s2">def </span><span class="s1">build_extension(self</span><span class="s2">, </span><span class="s1">ext):</span>
+        <span class="s1">sources = ext.sources</span>
+        <span class="s2">if </span><span class="s1">sources </span><span class="s2">is None or not </span><span class="s1">is_sequence(sources):</span>
+            <span class="s2">raise </span><span class="s1">DistutilsSetupError(</span>
+                <span class="s1">(</span><span class="s3">&quot;in 'ext_modules' option (extension '%s'), &quot; </span><span class="s1">+</span>
+                 <span class="s3">&quot;'sources' must be present and must be &quot; </span><span class="s1">+</span>
+                 <span class="s3">&quot;a list of source filenames&quot;</span><span class="s1">) % ext.name)</span>
+        <span class="s1">sources = list(sources)</span>
+
+        <span class="s2">if not </span><span class="s1">sources:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">fullname = self.get_ext_fullname(ext.name)</span>
+        <span class="s2">if </span><span class="s1">self.inplace:</span>
+            <span class="s1">modpath = fullname.split(</span><span class="s3">'.'</span><span class="s1">)</span>
+            <span class="s1">package = </span><span class="s3">'.'</span><span class="s1">.join(modpath[</span><span class="s5">0</span><span class="s1">:-</span><span class="s5">1</span><span class="s1">])</span>
+            <span class="s1">base = modpath[-</span><span class="s5">1</span><span class="s1">]</span>
+            <span class="s1">build_py = self.get_finalized_command(</span><span class="s3">'build_py'</span><span class="s1">)</span>
+            <span class="s1">package_dir = build_py.get_package_dir(package)</span>
+            <span class="s1">ext_filename = os.path.join(package_dir</span><span class="s2">,</span>
+                                        <span class="s1">self.get_ext_filename(base))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">ext_filename = os.path.join(self.build_lib</span><span class="s2">,</span>
+                                        <span class="s1">self.get_ext_filename(fullname))</span>
+        <span class="s1">depends = sources + ext.depends</span>
+
+        <span class="s2">if not </span><span class="s1">(self.force </span><span class="s2">or </span><span class="s1">newer_group(depends</span><span class="s2">, </span><span class="s1">ext_filename</span><span class="s2">, </span><span class="s3">'newer'</span><span class="s1">)):</span>
+            <span class="s1">log.debug(</span><span class="s3">&quot;skipping '%s' extension (up-to-date)&quot;</span><span class="s2">, </span><span class="s1">ext.name)</span>
+            <span class="s2">return</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">log.info(</span><span class="s3">&quot;building '%s' extension&quot;</span><span class="s2">, </span><span class="s1">ext.name)</span>
+
+        <span class="s1">extra_args = ext.extra_compile_args </span><span class="s2">or </span><span class="s1">[]</span>
+        <span class="s1">macros = ext.define_macros[:]</span>
+        <span class="s2">for </span><span class="s1">undef </span><span class="s2">in </span><span class="s1">ext.undef_macros:</span>
+            <span class="s1">macros.append((undef</span><span class="s2">,</span><span class="s1">))</span>
+
+        <span class="s1">c_sources</span><span class="s2">, </span><span class="s1">cxx_sources</span><span class="s2">, </span><span class="s1">f_sources</span><span class="s2">, </span><span class="s1">fmodule_sources = \</span>
+            <span class="s1">filter_sources(ext.sources)</span>
+
+        <span class="s2">if </span><span class="s1">self.compiler.compiler_type == </span><span class="s3">'msvc'</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">cxx_sources:</span>
+                <span class="s4"># Needed to compile kiva.agg._agg extension.</span>
+                <span class="s1">extra_args.append(</span><span class="s3">'/Zm1000'</span><span class="s1">)</span>
+            <span class="s4"># this hack works around the msvc compiler attributes</span>
+            <span class="s4"># problem, msvc uses its own convention :(</span>
+            <span class="s1">c_sources += cxx_sources</span>
+            <span class="s1">cxx_sources = []</span>
+
+        <span class="s4"># Set Fortran/C++ compilers for compilation and linking.</span>
+        <span class="s2">if </span><span class="s1">ext.language == </span><span class="s3">'f90'</span><span class="s1">:</span>
+            <span class="s1">fcompiler = self._f90_compiler</span>
+        <span class="s2">elif </span><span class="s1">ext.language == </span><span class="s3">'f77'</span><span class="s1">:</span>
+            <span class="s1">fcompiler = self._f77_compiler</span>
+        <span class="s2">else</span><span class="s1">:  </span><span class="s4"># in case ext.language is c++, for instance</span>
+            <span class="s1">fcompiler = self._f90_compiler </span><span class="s2">or </span><span class="s1">self._f77_compiler</span>
+        <span class="s2">if </span><span class="s1">fcompiler </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">fcompiler.extra_f77_compile_args = (ext.extra_f77_compile_args </span><span class="s2">or </span><span class="s1">[]) </span><span class="s2">if </span><span class="s1">hasattr(</span>
+                <span class="s1">ext</span><span class="s2">, </span><span class="s3">'extra_f77_compile_args'</span><span class="s1">) </span><span class="s2">else </span><span class="s1">[]</span>
+            <span class="s1">fcompiler.extra_f90_compile_args = (ext.extra_f90_compile_args </span><span class="s2">or </span><span class="s1">[]) </span><span class="s2">if </span><span class="s1">hasattr(</span>
+                <span class="s1">ext</span><span class="s2">, </span><span class="s3">'extra_f90_compile_args'</span><span class="s1">) </span><span class="s2">else </span><span class="s1">[]</span>
+        <span class="s1">cxx_compiler = self._cxx_compiler</span>
+
+        <span class="s4"># check for the availability of required compilers</span>
+        <span class="s2">if </span><span class="s1">cxx_sources </span><span class="s2">and </span><span class="s1">cxx_compiler </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">DistutilsError(</span><span class="s3">&quot;extension %r has C++ sources&quot;</span>
+                                 <span class="s3">&quot;but no C++ compiler found&quot; </span><span class="s1">% (ext.name))</span>
+        <span class="s2">if </span><span class="s1">(f_sources </span><span class="s2">or </span><span class="s1">fmodule_sources) </span><span class="s2">and </span><span class="s1">fcompiler </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">DistutilsError(</span><span class="s3">&quot;extension %r has Fortran sources &quot;</span>
+                                 <span class="s3">&quot;but no Fortran compiler found&quot; </span><span class="s1">% (ext.name))</span>
+        <span class="s2">if </span><span class="s1">ext.language </span><span class="s2">in </span><span class="s1">[</span><span class="s3">'f77'</span><span class="s2">, </span><span class="s3">'f90'</span><span class="s1">] </span><span class="s2">and </span><span class="s1">fcompiler </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.warn(</span><span class="s3">&quot;extension %r has Fortran libraries &quot;</span>
+                      <span class="s3">&quot;but no Fortran linker found, using default linker&quot; </span><span class="s1">% (ext.name))</span>
+        <span class="s2">if </span><span class="s1">ext.language == </span><span class="s3">'c++' </span><span class="s2">and </span><span class="s1">cxx_compiler </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.warn(</span><span class="s3">&quot;extension %r has C++ libraries &quot;</span>
+                      <span class="s3">&quot;but no C++ linker found, using default linker&quot; </span><span class="s1">% (ext.name))</span>
+
+        <span class="s1">kws = {</span><span class="s3">'depends'</span><span class="s1">: ext.depends}</span>
+        <span class="s1">output_dir = self.build_temp</span>
+
+        <span class="s1">include_dirs = ext.include_dirs + get_numpy_include_dirs()</span>
+
+        <span class="s4"># filtering C dispatch-table sources when optimization is not disabled,</span>
+        <span class="s4"># otherwise treated as normal sources.</span>
+        <span class="s1">copt_c_sources = []</span>
+        <span class="s1">copt_baseline_flags = []</span>
+        <span class="s1">copt_macros = []</span>
+        <span class="s2">if not </span><span class="s1">self.disable_optimization:</span>
+            <span class="s1">bsrc_dir = self.get_finalized_command(</span><span class="s3">&quot;build_src&quot;</span><span class="s1">).build_src</span>
+            <span class="s1">dispatch_hpath = os.path.join(</span><span class="s3">&quot;numpy&quot;</span><span class="s2">, </span><span class="s3">&quot;distutils&quot;</span><span class="s2">, </span><span class="s3">&quot;include&quot;</span><span class="s1">)</span>
+            <span class="s1">dispatch_hpath = os.path.join(bsrc_dir</span><span class="s2">, </span><span class="s1">dispatch_hpath)</span>
+            <span class="s1">include_dirs.append(dispatch_hpath)</span>
+
+            <span class="s1">copt_build_src = </span><span class="s2">None if </span><span class="s1">self.inplace </span><span class="s2">else </span><span class="s1">bsrc_dir</span>
+            <span class="s1">copt_c_sources = [</span>
+                <span class="s1">c_sources.pop(c_sources.index(src))</span>
+                <span class="s2">for </span><span class="s1">src </span><span class="s2">in </span><span class="s1">c_sources[:] </span><span class="s2">if </span><span class="s1">src.endswith(</span><span class="s3">&quot;.dispatch.c&quot;</span><span class="s1">)</span>
+            <span class="s1">]</span>
+            <span class="s1">copt_baseline_flags = self.compiler_opt.cpu_baseline_flags()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">copt_macros.append((</span><span class="s3">&quot;NPY_DISABLE_OPTIMIZATION&quot;</span><span class="s2">, </span><span class="s5">1</span><span class="s1">))</span>
+
+        <span class="s1">c_objects = []</span>
+        <span class="s2">if </span><span class="s1">copt_c_sources:</span>
+            <span class="s1">log.info(</span><span class="s3">&quot;compiling C dispatch-able sources&quot;</span><span class="s1">)</span>
+            <span class="s1">c_objects += self.compiler_opt.try_dispatch(copt_c_sources</span><span class="s2">,</span>
+                                                        <span class="s1">output_dir=output_dir</span><span class="s2">,</span>
+                                                        <span class="s1">src_dir=copt_build_src</span><span class="s2">,</span>
+                                                        <span class="s1">macros=macros + copt_macros</span><span class="s2">,</span>
+                                                        <span class="s1">include_dirs=include_dirs</span><span class="s2">,</span>
+                                                        <span class="s1">debug=self.debug</span><span class="s2">,</span>
+                                                        <span class="s1">extra_postargs=extra_args</span><span class="s2">,</span>
+                                                        <span class="s1">**kws)</span>
+        <span class="s2">if </span><span class="s1">c_sources:</span>
+            <span class="s1">log.info(</span><span class="s3">&quot;compiling C sources&quot;</span><span class="s1">)</span>
+            <span class="s1">c_objects += self.compiler.compile(c_sources</span><span class="s2">,</span>
+                                               <span class="s1">output_dir=output_dir</span><span class="s2">,</span>
+                                               <span class="s1">macros=macros + copt_macros</span><span class="s2">,</span>
+                                               <span class="s1">include_dirs=include_dirs</span><span class="s2">,</span>
+                                               <span class="s1">debug=self.debug</span><span class="s2">,</span>
+                                               <span class="s1">extra_postargs=extra_args + copt_baseline_flags</span><span class="s2">,</span>
+                                               <span class="s1">**kws)</span>
+        <span class="s2">if </span><span class="s1">cxx_sources:</span>
+            <span class="s1">log.info(</span><span class="s3">&quot;compiling C++ sources&quot;</span><span class="s1">)</span>
+            <span class="s1">c_objects += cxx_compiler.compile(cxx_sources</span><span class="s2">,</span>
+                                              <span class="s1">output_dir=output_dir</span><span class="s2">,</span>
+                                              <span class="s1">macros=macros + copt_macros</span><span class="s2">,</span>
+                                              <span class="s1">include_dirs=include_dirs</span><span class="s2">,</span>
+                                              <span class="s1">debug=self.debug</span><span class="s2">,</span>
+                                              <span class="s1">extra_postargs=extra_args + copt_baseline_flags</span><span class="s2">,</span>
+                                              <span class="s1">**kws)</span>
+
+        <span class="s1">extra_postargs = []</span>
+        <span class="s1">f_objects = []</span>
+        <span class="s2">if </span><span class="s1">fmodule_sources:</span>
+            <span class="s1">log.info(</span><span class="s3">&quot;compiling Fortran 90 module sources&quot;</span><span class="s1">)</span>
+            <span class="s1">module_dirs = ext.module_dirs[:]</span>
+            <span class="s1">module_build_dir = os.path.join(</span>
+                <span class="s1">self.build_temp</span><span class="s2">, </span><span class="s1">os.path.dirname(</span>
+                    <span class="s1">self.get_ext_filename(fullname)))</span>
+
+            <span class="s1">self.mkpath(module_build_dir)</span>
+            <span class="s2">if </span><span class="s1">fcompiler.module_dir_switch </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">existing_modules = glob(</span><span class="s3">'*.mod'</span><span class="s1">)</span>
+            <span class="s1">extra_postargs += fcompiler.module_options(</span>
+                <span class="s1">module_dirs</span><span class="s2">, </span><span class="s1">module_build_dir)</span>
+            <span class="s1">f_objects += fcompiler.compile(fmodule_sources</span><span class="s2">,</span>
+                                           <span class="s1">output_dir=self.build_temp</span><span class="s2">,</span>
+                                           <span class="s1">macros=macros</span><span class="s2">,</span>
+                                           <span class="s1">include_dirs=include_dirs</span><span class="s2">,</span>
+                                           <span class="s1">debug=self.debug</span><span class="s2">,</span>
+                                           <span class="s1">extra_postargs=extra_postargs</span><span class="s2">,</span>
+                                           <span class="s1">depends=ext.depends)</span>
+
+            <span class="s2">if </span><span class="s1">fcompiler.module_dir_switch </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">glob(</span><span class="s3">'*.mod'</span><span class="s1">):</span>
+                    <span class="s2">if </span><span class="s1">f </span><span class="s2">in </span><span class="s1">existing_modules:</span>
+                        <span class="s2">continue</span>
+                    <span class="s1">t = os.path.join(module_build_dir</span><span class="s2">, </span><span class="s1">f)</span>
+                    <span class="s2">if </span><span class="s1">os.path.abspath(f) == os.path.abspath(t):</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if </span><span class="s1">os.path.isfile(t):</span>
+                        <span class="s1">os.remove(t)</span>
+                    <span class="s2">try</span><span class="s1">:</span>
+                        <span class="s1">self.move_file(f</span><span class="s2">, </span><span class="s1">module_build_dir)</span>
+                    <span class="s2">except </span><span class="s1">DistutilsFileError:</span>
+                        <span class="s1">log.warn(</span><span class="s3">'failed to move %r to %r' </span><span class="s1">%</span>
+                                 <span class="s1">(f</span><span class="s2">, </span><span class="s1">module_build_dir))</span>
+        <span class="s2">if </span><span class="s1">f_sources:</span>
+            <span class="s1">log.info(</span><span class="s3">&quot;compiling Fortran sources&quot;</span><span class="s1">)</span>
+            <span class="s1">f_objects += fcompiler.compile(f_sources</span><span class="s2">,</span>
+                                           <span class="s1">output_dir=self.build_temp</span><span class="s2">,</span>
+                                           <span class="s1">macros=macros</span><span class="s2">,</span>
+                                           <span class="s1">include_dirs=include_dirs</span><span class="s2">,</span>
+                                           <span class="s1">debug=self.debug</span><span class="s2">,</span>
+                                           <span class="s1">extra_postargs=extra_postargs</span><span class="s2">,</span>
+                                           <span class="s1">depends=ext.depends)</span>
+
+        <span class="s2">if </span><span class="s1">f_objects </span><span class="s2">and not </span><span class="s1">fcompiler.can_ccompiler_link(self.compiler):</span>
+            <span class="s1">unlinkable_fobjects = f_objects</span>
+            <span class="s1">objects = c_objects</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">unlinkable_fobjects = []</span>
+            <span class="s1">objects = c_objects + f_objects</span>
+
+        <span class="s2">if </span><span class="s1">ext.extra_objects:</span>
+            <span class="s1">objects.extend(ext.extra_objects)</span>
+        <span class="s1">extra_args = ext.extra_link_args </span><span class="s2">or </span><span class="s1">[]</span>
+        <span class="s1">libraries = self.get_libraries(ext)[:]</span>
+        <span class="s1">library_dirs = ext.library_dirs[:]</span>
+
+        <span class="s1">linker = self.compiler.link_shared_object</span>
+        <span class="s4"># Always use system linker when using MSVC compiler.</span>
+        <span class="s2">if </span><span class="s1">self.compiler.compiler_type </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'msvc'</span><span class="s2">, </span><span class="s3">'intelw'</span><span class="s2">, </span><span class="s3">'intelemw'</span><span class="s1">):</span>
+            <span class="s4"># expand libraries with fcompiler libraries as we are</span>
+            <span class="s4"># not using fcompiler linker</span>
+            <span class="s1">self._libs_with_msvc_and_fortran(</span>
+                <span class="s1">fcompiler</span><span class="s2">, </span><span class="s1">libraries</span><span class="s2">, </span><span class="s1">library_dirs)</span>
+
+        <span class="s2">elif </span><span class="s1">ext.language </span><span class="s2">in </span><span class="s1">[</span><span class="s3">'f77'</span><span class="s2">, </span><span class="s3">'f90'</span><span class="s1">] </span><span class="s2">and </span><span class="s1">fcompiler </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">linker = fcompiler.link_shared_object</span>
+        <span class="s2">if </span><span class="s1">ext.language == </span><span class="s3">'c++' </span><span class="s2">and </span><span class="s1">cxx_compiler </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">linker = cxx_compiler.link_shared_object</span>
+
+        <span class="s2">if </span><span class="s1">fcompiler </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">objects</span><span class="s2">, </span><span class="s1">libraries = self._process_unlinkable_fobjects(</span>
+                    <span class="s1">objects</span><span class="s2">, </span><span class="s1">libraries</span><span class="s2">,</span>
+                    <span class="s1">fcompiler</span><span class="s2">, </span><span class="s1">library_dirs</span><span class="s2">,</span>
+                    <span class="s1">unlinkable_fobjects)</span>
+
+        <span class="s1">linker(objects</span><span class="s2">, </span><span class="s1">ext_filename</span><span class="s2">,</span>
+               <span class="s1">libraries=libraries</span><span class="s2">,</span>
+               <span class="s1">library_dirs=library_dirs</span><span class="s2">,</span>
+               <span class="s1">runtime_library_dirs=ext.runtime_library_dirs</span><span class="s2">,</span>
+               <span class="s1">extra_postargs=extra_args</span><span class="s2">,</span>
+               <span class="s1">export_symbols=self.get_export_symbols(ext)</span><span class="s2">,</span>
+               <span class="s1">debug=self.debug</span><span class="s2">,</span>
+               <span class="s1">build_temp=self.build_temp</span><span class="s2">,</span>
+               <span class="s1">target_lang=ext.language)</span>
+
+    <span class="s2">def </span><span class="s1">_add_dummy_mingwex_sym(self</span><span class="s2">, </span><span class="s1">c_sources):</span>
+        <span class="s1">build_src = self.get_finalized_command(</span><span class="s3">&quot;build_src&quot;</span><span class="s1">).build_src</span>
+        <span class="s1">build_clib = self.get_finalized_command(</span><span class="s3">&quot;build_clib&quot;</span><span class="s1">).build_clib</span>
+        <span class="s1">objects = self.compiler.compile([os.path.join(build_src</span><span class="s2">,</span>
+                                                      <span class="s3">&quot;gfortran_vs2003_hack.c&quot;</span><span class="s1">)]</span><span class="s2">,</span>
+                                        <span class="s1">output_dir=self.build_temp)</span>
+        <span class="s1">self.compiler.create_static_lib(</span>
+            <span class="s1">objects</span><span class="s2">, </span><span class="s3">&quot;_gfortran_workaround&quot;</span><span class="s2">, </span><span class="s1">output_dir=build_clib</span><span class="s2">, </span><span class="s1">debug=self.debug)</span>
+
+    <span class="s2">def </span><span class="s1">_process_unlinkable_fobjects(self</span><span class="s2">, </span><span class="s1">objects</span><span class="s2">, </span><span class="s1">libraries</span><span class="s2">,</span>
+                                     <span class="s1">fcompiler</span><span class="s2">, </span><span class="s1">library_dirs</span><span class="s2">,</span>
+                                     <span class="s1">unlinkable_fobjects):</span>
+        <span class="s1">libraries = list(libraries)</span>
+        <span class="s1">objects = list(objects)</span>
+        <span class="s1">unlinkable_fobjects = list(unlinkable_fobjects)</span>
+
+        <span class="s4"># Expand possible fake static libraries to objects;</span>
+        <span class="s4"># make sure to iterate over a copy of the list as</span>
+        <span class="s4"># &quot;fake&quot; libraries will be removed as they are</span>
+        <span class="s4"># enountered</span>
+        <span class="s2">for </span><span class="s1">lib </span><span class="s2">in </span><span class="s1">libraries[:]:</span>
+            <span class="s2">for </span><span class="s1">libdir </span><span class="s2">in </span><span class="s1">library_dirs:</span>
+                <span class="s1">fake_lib = os.path.join(libdir</span><span class="s2">, </span><span class="s1">lib + </span><span class="s3">'.fobjects'</span><span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">os.path.isfile(fake_lib):</span>
+                    <span class="s4"># Replace fake static library</span>
+                    <span class="s1">libraries.remove(lib)</span>
+                    <span class="s2">with </span><span class="s1">open(fake_lib</span><span class="s2">, </span><span class="s3">'r'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+                        <span class="s1">unlinkable_fobjects.extend(f.read().splitlines())</span>
+
+                    <span class="s4"># Expand C objects</span>
+                    <span class="s1">c_lib = os.path.join(libdir</span><span class="s2">, </span><span class="s1">lib + </span><span class="s3">'.cobjects'</span><span class="s1">)</span>
+                    <span class="s2">with </span><span class="s1">open(c_lib</span><span class="s2">, </span><span class="s3">'r'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+                        <span class="s1">objects.extend(f.read().splitlines())</span>
+
+        <span class="s4"># Wrap unlinkable objects to a linkable one</span>
+        <span class="s2">if </span><span class="s1">unlinkable_fobjects:</span>
+            <span class="s1">fobjects = [os.path.abspath(obj) </span><span class="s2">for </span><span class="s1">obj </span><span class="s2">in </span><span class="s1">unlinkable_fobjects]</span>
+            <span class="s1">wrapped = fcompiler.wrap_unlinkable_objects(</span>
+                    <span class="s1">fobjects</span><span class="s2">, </span><span class="s1">output_dir=self.build_temp</span><span class="s2">,</span>
+                    <span class="s1">extra_dll_dir=self.extra_dll_dir)</span>
+            <span class="s1">objects.extend(wrapped)</span>
+
+        <span class="s2">return </span><span class="s1">objects</span><span class="s2">, </span><span class="s1">libraries</span>
+
+    <span class="s2">def </span><span class="s1">_libs_with_msvc_and_fortran(self</span><span class="s2">, </span><span class="s1">fcompiler</span><span class="s2">, </span><span class="s1">c_libraries</span><span class="s2">,</span>
+                                    <span class="s1">c_library_dirs):</span>
+        <span class="s2">if </span><span class="s1">fcompiler </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">for </span><span class="s1">libname </span><span class="s2">in </span><span class="s1">c_libraries:</span>
+            <span class="s2">if </span><span class="s1">libname.startswith(</span><span class="s3">'msvc'</span><span class="s1">):</span>
+                <span class="s2">continue</span>
+            <span class="s1">fileexists = </span><span class="s2">False</span>
+            <span class="s2">for </span><span class="s1">libdir </span><span class="s2">in </span><span class="s1">c_library_dirs </span><span class="s2">or </span><span class="s1">[]:</span>
+                <span class="s1">libfile = os.path.join(libdir</span><span class="s2">, </span><span class="s3">'%s.lib' </span><span class="s1">% (libname))</span>
+                <span class="s2">if </span><span class="s1">os.path.isfile(libfile):</span>
+                    <span class="s1">fileexists = </span><span class="s2">True</span>
+                    <span class="s2">break</span>
+            <span class="s2">if </span><span class="s1">fileexists:</span>
+                <span class="s2">continue</span>
+            <span class="s4"># make g77-compiled static libs available to MSVC</span>
+            <span class="s1">fileexists = </span><span class="s2">False</span>
+            <span class="s2">for </span><span class="s1">libdir </span><span class="s2">in </span><span class="s1">c_library_dirs:</span>
+                <span class="s1">libfile = os.path.join(libdir</span><span class="s2">, </span><span class="s3">'lib%s.a' </span><span class="s1">% (libname))</span>
+                <span class="s2">if </span><span class="s1">os.path.isfile(libfile):</span>
+                    <span class="s4"># copy libname.a file to name.lib so that MSVC linker</span>
+                    <span class="s4"># can find it</span>
+                    <span class="s1">libfile2 = os.path.join(self.build_temp</span><span class="s2">, </span><span class="s1">libname + </span><span class="s3">'.lib'</span><span class="s1">)</span>
+                    <span class="s1">copy_file(libfile</span><span class="s2">, </span><span class="s1">libfile2)</span>
+                    <span class="s2">if </span><span class="s1">self.build_temp </span><span class="s2">not in </span><span class="s1">c_library_dirs:</span>
+                        <span class="s1">c_library_dirs.append(self.build_temp)</span>
+                    <span class="s1">fileexists = </span><span class="s2">True</span>
+                    <span class="s2">break</span>
+            <span class="s2">if </span><span class="s1">fileexists:</span>
+                <span class="s2">continue</span>
+            <span class="s1">log.warn(</span><span class="s3">'could not find library %r in directories %s'</span>
+                     <span class="s1">% (libname</span><span class="s2">, </span><span class="s1">c_library_dirs))</span>
+
+        <span class="s4"># Always use system linker when using MSVC compiler.</span>
+        <span class="s1">f_lib_dirs = []</span>
+        <span class="s2">for </span><span class="s1">dir </span><span class="s2">in </span><span class="s1">fcompiler.library_dirs:</span>
+            <span class="s4"># correct path when compiling in Cygwin but with normal Win</span>
+            <span class="s4"># Python</span>
+            <span class="s2">if </span><span class="s1">dir.startswith(</span><span class="s3">'/usr/lib'</span><span class="s1">):</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">dir = subprocess.check_output([</span><span class="s3">'cygpath'</span><span class="s2">, </span><span class="s3">'-w'</span><span class="s2">, </span><span class="s1">dir])</span>
+                <span class="s2">except </span><span class="s1">(OSError</span><span class="s2">, </span><span class="s1">subprocess.CalledProcessError):</span>
+                    <span class="s2">pass</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">dir = filepath_from_subprocess_output(dir)</span>
+            <span class="s1">f_lib_dirs.append(dir)</span>
+        <span class="s1">c_library_dirs.extend(f_lib_dirs)</span>
+
+        <span class="s4"># make g77-compiled static libs available to MSVC</span>
+        <span class="s2">for </span><span class="s1">lib </span><span class="s2">in </span><span class="s1">fcompiler.libraries:</span>
+            <span class="s2">if not </span><span class="s1">lib.startswith(</span><span class="s3">'msvc'</span><span class="s1">):</span>
+                <span class="s1">c_libraries.append(lib)</span>
+                <span class="s1">p = combine_paths(f_lib_dirs</span><span class="s2">, </span><span class="s3">'lib' </span><span class="s1">+ lib + </span><span class="s3">'.a'</span><span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">p:</span>
+                    <span class="s1">dst_name = os.path.join(self.build_temp</span><span class="s2">, </span><span class="s1">lib + </span><span class="s3">'.lib'</span><span class="s1">)</span>
+                    <span class="s2">if not </span><span class="s1">os.path.isfile(dst_name):</span>
+                        <span class="s1">copy_file(p[</span><span class="s5">0</span><span class="s1">]</span><span class="s2">, </span><span class="s1">dst_name)</span>
+                    <span class="s2">if </span><span class="s1">self.build_temp </span><span class="s2">not in </span><span class="s1">c_library_dirs:</span>
+                        <span class="s1">c_library_dirs.append(self.build_temp)</span>
+
+    <span class="s2">def </span><span class="s1">get_source_files(self):</span>
+        <span class="s1">self.check_extensions_list(self.extensions)</span>
+        <span class="s1">filenames = []</span>
+        <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">self.extensions:</span>
+            <span class="s1">filenames.extend(get_ext_source_files(ext))</span>
+        <span class="s2">return </span><span class="s1">filenames</span>
+
+    <span class="s2">def </span><span class="s1">get_outputs(self):</span>
+        <span class="s1">self.check_extensions_list(self.extensions)</span>
+
+        <span class="s1">outputs = []</span>
+        <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">self.extensions:</span>
+            <span class="s2">if not </span><span class="s1">ext.sources:</span>
+                <span class="s2">continue</span>
+            <span class="s1">fullname = self.get_ext_fullname(ext.name)</span>
+            <span class="s1">outputs.append(os.path.join(self.build_lib</span><span class="s2">,</span>
+                                        <span class="s1">self.get_ext_filename(fullname)))</span>
+        <span class="s2">return </span><span class="s1">outputs</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,378 @@
+<html>
+<head>
+<title>fromnumeric.pyi</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6897bb;}
+.s3 { color: #808080;}
+.s4 { color: #6a8759;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+fromnumeric.pyi</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">datetime </span><span class="s0">as </span><span class="s1">dt</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span><span class="s0">, </span><span class="s1">Union</span><span class="s0">, </span><span class="s1">Sequence</span><span class="s0">, </span><span class="s1">Tuple</span><span class="s0">, </span><span class="s1">Any</span><span class="s0">, </span><span class="s1">overload</span><span class="s0">, </span><span class="s1">TypeVar</span>
+
+<span class="s0">from </span><span class="s1">numpy </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">ndarray</span><span class="s0">,</span>
+    <span class="s1">signedinteger</span><span class="s0">,</span>
+    <span class="s1">bool_</span><span class="s0">,</span>
+    <span class="s1">generic</span><span class="s0">,</span>
+    <span class="s1">_OrderKACF</span><span class="s0">,</span>
+    <span class="s1">_OrderACF</span><span class="s0">,</span>
+    <span class="s1">_ArrayLikeBool</span><span class="s0">,</span>
+    <span class="s1">_ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">_ModeKind</span><span class="s0">,</span>
+    <span class="s1">_PartitionKind</span><span class="s0">,</span>
+    <span class="s1">_SortKind</span><span class="s0">,</span>
+    <span class="s1">_SortSide</span><span class="s0">,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">numpy.typing </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">DTypeLike</span><span class="s0">,</span>
+    <span class="s1">ArrayLike</span><span class="s0">,</span>
+    <span class="s1">_ShapeLike</span><span class="s0">,</span>
+    <span class="s1">_Shape</span><span class="s0">,</span>
+    <span class="s1">_NumberLike</span><span class="s0">,</span>
+<span class="s1">)</span>
+
+<span class="s0">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s2">3</span><span class="s0">, </span><span class="s2">8</span><span class="s1">):</span>
+    <span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Literal</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Literal</span>
+
+<span class="s3"># Various annotations for scalars</span>
+
+<span class="s3"># While dt.datetime and dt.timedelta are not technically part of NumPy,</span>
+<span class="s3"># they are one of the rare few builtin scalars which serve as valid return types.</span>
+<span class="s3"># See https://github.com/numpy/numpy-stubs/pull/67#discussion_r412604113.</span>
+<span class="s1">_ScalarNumpy = Union[generic</span><span class="s0">, </span><span class="s1">dt.datetime</span><span class="s0">, </span><span class="s1">dt.timedelta]</span>
+<span class="s1">_ScalarBuiltin = Union[str</span><span class="s0">, </span><span class="s1">bytes</span><span class="s0">, </span><span class="s1">dt.date</span><span class="s0">, </span><span class="s1">dt.timedelta</span><span class="s0">, </span><span class="s1">bool</span><span class="s0">, </span><span class="s1">int</span><span class="s0">, </span><span class="s1">float</span><span class="s0">, </span><span class="s1">complex]</span>
+<span class="s1">_Scalar = Union[_ScalarBuiltin</span><span class="s0">, </span><span class="s1">_ScalarNumpy]</span>
+
+<span class="s3"># Integers and booleans can generally be used interchangeably</span>
+<span class="s1">_ScalarGeneric = TypeVar(</span><span class="s4">&quot;_ScalarGeneric&quot;</span><span class="s0">, </span><span class="s1">bound=generic)</span>
+
+<span class="s3"># The signature of take() follows a common theme with its overloads:</span>
+<span class="s3"># 1. A generic comes in; the same generic comes out</span>
+<span class="s3"># 2. A scalar comes in; a generic comes out</span>
+<span class="s3"># 3. An array-like object comes in; some keyword ensures that a generic comes out</span>
+<span class="s3"># 4. An array-like object comes in; an ndarray or generic comes out</span>
+<span class="s0">def </span><span class="s1">take(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">indices: _ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">mode: _ModeKind = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">reshape(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">newshape: _ShapeLike</span><span class="s0">,</span>
+    <span class="s1">order: _OrderACF = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">choose(</span>
+    <span class="s1">a: _ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">choices: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">mode: _ModeKind = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">repeat(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">repeats: _ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">put(</span>
+    <span class="s1">a: ndarray</span><span class="s0">,</span>
+    <span class="s1">ind: _ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">v: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">mode: _ModeKind = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+
+<span class="s0">def </span><span class="s1">swapaxes(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis1: int</span><span class="s0">,</span>
+    <span class="s1">axis2: int</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">transpose(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axes: Union[</span><span class="s0">None, </span><span class="s1">Sequence[int]</span><span class="s0">, </span><span class="s1">ndarray] = ...</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">partition(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">kth: _ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">kind: _PartitionKind = ...</span><span class="s0">,</span>
+    <span class="s1">order: Union[</span><span class="s0">None, </span><span class="s1">str</span><span class="s0">, </span><span class="s1">Sequence[str]] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">argpartition(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">kth: _ArrayLikeIntOrBool</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">kind: _PartitionKind = ...</span><span class="s0">,</span>
+    <span class="s1">order: Union[</span><span class="s0">None, </span><span class="s1">str</span><span class="s0">, </span><span class="s1">Sequence[str]] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">sort(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">kind: Optional[_SortKind] = ...</span><span class="s0">,</span>
+    <span class="s1">order: Union[</span><span class="s0">None, </span><span class="s1">str</span><span class="s0">, </span><span class="s1">Sequence[str]] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">argsort(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">kind: Optional[_SortKind] = ...</span><span class="s0">,</span>
+    <span class="s1">order: Union[</span><span class="s0">None, </span><span class="s1">str</span><span class="s0">, </span><span class="s1">Sequence[str]] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">argmax(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: </span><span class="s0">None </span><span class="s1">= ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; signedinteger[Any]: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">argmax(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">argmin(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: </span><span class="s0">None </span><span class="s1">= ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; signedinteger[Any]: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">argmin(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">searchsorted(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">v: _Scalar</span><span class="s0">,</span>
+    <span class="s1">side: _SortSide = ...</span><span class="s0">,</span>
+    <span class="s1">sorter: Optional[_ArrayLikeIntOrBool] = ...</span><span class="s0">,  </span><span class="s3"># 1D int array</span>
+<span class="s1">) -&gt; signedinteger[Any]: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">searchsorted(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">v: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">side: _SortSide = ...</span><span class="s0">,</span>
+    <span class="s1">sorter: Optional[_ArrayLikeIntOrBool] = ...</span><span class="s0">,  </span><span class="s3"># 1D int array</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">resize(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">new_shape: _ShapeLike</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">squeeze(</span>
+    <span class="s1">a: _ScalarGeneric</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; _ScalarGeneric: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">squeeze(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">diagonal(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">offset: int = ...</span><span class="s0">,</span>
+    <span class="s1">axis1: int = ...</span><span class="s0">,</span>
+    <span class="s1">axis2: int = ...</span><span class="s0">,  </span><span class="s3"># &gt;= 2D array</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">trace(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,  </span><span class="s3"># &gt;= 2D array</span>
+    <span class="s1">offset: int = ...</span><span class="s0">,</span>
+    <span class="s1">axis1: int = ...</span><span class="s0">,</span>
+    <span class="s1">axis2: int = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">ravel(a: ArrayLike</span><span class="s0">, </span><span class="s1">order: _OrderKACF = ...) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">nonzero(a: ArrayLike) -&gt; Tuple[ndarray</span><span class="s0">, </span><span class="s1">...]: ...</span>
+
+<span class="s0">def </span><span class="s1">shape(a: ArrayLike) -&gt; _Shape: ...</span>
+
+<span class="s0">def </span><span class="s1">compress(</span>
+    <span class="s1">condition: ArrayLike</span><span class="s0">,  </span><span class="s3"># 1D bool array</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">clip(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">a_min: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">a_max: Optional[ArrayLike]</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">**kwargs: Any</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">clip(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">a_min: </span><span class="s0">None,</span>
+    <span class="s1">a_max: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">**kwargs: Any</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">sum(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: _ShapeLike = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+    <span class="s1">initial: _NumberLike = ...</span><span class="s0">,</span>
+    <span class="s1">where: _ArrayLikeBool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">all(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: </span><span class="s0">None </span><span class="s1">= ...</span><span class="s0">,</span>
+    <span class="s1">out: </span><span class="s0">None </span><span class="s1">= ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: Literal[</span><span class="s0">False</span><span class="s1">] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; bool_: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">all(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">any(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: </span><span class="s0">None </span><span class="s1">= ...</span><span class="s0">,</span>
+    <span class="s1">out: </span><span class="s0">None </span><span class="s1">= ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: Literal[</span><span class="s0">False</span><span class="s1">] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; bool_: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">any(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">cumsum(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">ptp(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">amax(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+    <span class="s1">initial: _NumberLike = ...</span><span class="s0">,</span>
+    <span class="s1">where: _ArrayLikeBool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">amin(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+    <span class="s1">initial: _NumberLike = ...</span><span class="s0">,</span>
+    <span class="s1">where: _ArrayLikeBool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s3"># TODO: `np.prod()``: For object arrays `initial` does not necessarily</span>
+<span class="s3"># have to be a numerical scalar.</span>
+<span class="s3"># The only requirement is that it is compatible</span>
+<span class="s3"># with the `.__mul__()` method(s) of the passed array's elements.</span>
+
+<span class="s3"># Note that the same situation holds for all wrappers around</span>
+<span class="s3"># `np.ufunc.reduce`, e.g. `np.sum()` (`.__add__()`).</span>
+<span class="s0">def </span><span class="s1">prod(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+    <span class="s1">initial: _NumberLike = ...</span><span class="s0">,</span>
+    <span class="s1">where: _ArrayLikeBool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">cumprod(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[int] = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; ndarray: ...</span>
+
+<span class="s0">def </span><span class="s1">ndim(a: ArrayLike) -&gt; int: ...</span>
+
+<span class="s0">def </span><span class="s1">size(a: ArrayLike</span><span class="s0">, </span><span class="s1">axis: Optional[int] = ...) -&gt; int: ...</span>
+
+<span class="s0">def </span><span class="s1">around(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">decimals: int = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">mean(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">std(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">ddof: int = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+
+<span class="s0">def </span><span class="s1">var(</span>
+    <span class="s1">a: ArrayLike</span><span class="s0">,</span>
+    <span class="s1">axis: Optional[_ShapeLike] = ...</span><span class="s0">,</span>
+    <span class="s1">dtype: DTypeLike = ...</span><span class="s0">,</span>
+    <span class="s1">out: Optional[ndarray] = ...</span><span class="s0">,</span>
+    <span class="s1">ddof: int = ...</span><span class="s0">,</span>
+    <span class="s1">keepdims: bool = ...</span><span class="s0">,</span>
+<span class="s1">) -&gt; Any: ...</span>
+</pre>
+</body>
+</html>

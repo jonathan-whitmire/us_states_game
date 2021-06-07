@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>install.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6a8759;}
+.s3 { color: #808080;}
+.s4 { color: #629755; font-style: italic;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+install.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">if </span><span class="s2">'setuptools' </span><span class="s0">in </span><span class="s1">sys.modules:</span>
+    <span class="s0">import </span><span class="s1">setuptools.command.install </span><span class="s0">as </span><span class="s1">old_install_mod</span>
+    <span class="s1">have_setuptools = </span><span class="s0">True</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">import </span><span class="s1">distutils.command.install </span><span class="s0">as </span><span class="s1">old_install_mod</span>
+    <span class="s1">have_setuptools = </span><span class="s0">False</span>
+<span class="s0">from </span><span class="s1">distutils.file_util </span><span class="s0">import </span><span class="s1">write_file</span>
+
+<span class="s1">old_install = old_install_mod.install</span>
+
+<span class="s0">class </span><span class="s1">install(old_install):</span>
+
+    <span class="s3"># Always run install_clib - the command is cheap, so no need to bypass it;</span>
+    <span class="s3"># but it's not run by setuptools -- so it's run again in install_data</span>
+    <span class="s1">sub_commands = old_install.sub_commands + [</span>
+        <span class="s1">(</span><span class="s2">'install_clib'</span><span class="s0">, lambda </span><span class="s1">x: </span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">]</span>
+
+    <span class="s0">def </span><span class="s1">finalize_options (self):</span>
+        <span class="s1">old_install.finalize_options(self)</span>
+        <span class="s1">self.install_lib = self.install_libbase</span>
+
+    <span class="s0">def </span><span class="s1">setuptools_run(self):</span>
+        <span class="s4">&quot;&quot;&quot; The setuptools version of the .run() method. 
+ 
+        We must pull in the entire code so we can override the level used in the 
+        _getframe() call since we wrap this call by one more level. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">from </span><span class="s1">distutils.command.install </span><span class="s0">import </span><span class="s1">install </span><span class="s0">as </span><span class="s1">distutils_install</span>
+
+        <span class="s3"># Explicit request for old-style install?  Just do it</span>
+        <span class="s0">if </span><span class="s1">self.old_and_unmanageable </span><span class="s0">or </span><span class="s1">self.single_version_externally_managed:</span>
+            <span class="s0">return </span><span class="s1">distutils_install.run(self)</span>
+
+        <span class="s3"># Attempt to detect whether we were called from setup() or by another</span>
+        <span class="s3"># command.  If we were called by setup(), our caller will be the</span>
+        <span class="s3"># 'run_command' method in 'distutils.dist', and *its* caller will be</span>
+        <span class="s3"># the 'run_commands' method.  If we were called any other way, our</span>
+        <span class="s3"># immediate caller *might* be 'run_command', but it won't have been</span>
+        <span class="s3"># called by 'run_commands'.  This is slightly kludgy, but seems to</span>
+        <span class="s3"># work.</span>
+        <span class="s3">#</span>
+        <span class="s1">caller = sys._getframe(</span><span class="s5">3</span><span class="s1">)</span>
+        <span class="s1">caller_module = caller.f_globals.get(</span><span class="s2">'__name__'</span><span class="s0">, </span><span class="s2">''</span><span class="s1">)</span>
+        <span class="s1">caller_name = caller.f_code.co_name</span>
+
+        <span class="s0">if </span><span class="s1">caller_module != </span><span class="s2">'distutils.dist' </span><span class="s0">or </span><span class="s1">caller_name!=</span><span class="s2">'run_commands'</span><span class="s1">:</span>
+            <span class="s3"># We weren't called from the command line or setup(), so we</span>
+            <span class="s3"># should run in backward-compatibility mode to support bdist_*</span>
+            <span class="s3"># commands.</span>
+            <span class="s1">distutils_install.run(self)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self.do_egg_install()</span>
+
+    <span class="s0">def </span><span class="s1">run(self):</span>
+        <span class="s0">if not </span><span class="s1">have_setuptools:</span>
+            <span class="s1">r = old_install.run(self)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">r = self.setuptools_run()</span>
+        <span class="s0">if </span><span class="s1">self.record:</span>
+            <span class="s3"># bdist_rpm fails when INSTALLED_FILES contains</span>
+            <span class="s3"># paths with spaces. Such paths must be enclosed</span>
+            <span class="s3"># with double-quotes.</span>
+            <span class="s0">with </span><span class="s1">open(self.record</span><span class="s0">, </span><span class="s2">'r'</span><span class="s1">) </span><span class="s0">as </span><span class="s1">f:</span>
+                <span class="s1">lines = []</span>
+                <span class="s1">need_rewrite = </span><span class="s0">False</span>
+                <span class="s0">for </span><span class="s1">l </span><span class="s0">in </span><span class="s1">f:</span>
+                    <span class="s1">l = l.rstrip()</span>
+                    <span class="s0">if </span><span class="s2">' ' </span><span class="s0">in </span><span class="s1">l:</span>
+                        <span class="s1">need_rewrite = </span><span class="s0">True</span>
+                        <span class="s1">l = </span><span class="s2">'&quot;%s&quot;' </span><span class="s1">% (l)</span>
+                    <span class="s1">lines.append(l)</span>
+            <span class="s0">if </span><span class="s1">need_rewrite:</span>
+                <span class="s1">self.execute(write_file</span><span class="s0">,</span>
+                             <span class="s1">(self.record</span><span class="s0">, </span><span class="s1">lines)</span><span class="s0">,</span>
+                             <span class="s2">&quot;re-writing list of installed files to '%s'&quot; </span><span class="s1">%</span>
+                             <span class="s1">self.record)</span>
+        <span class="s0">return </span><span class="s1">r</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,1002 @@
+<html>
+<head>
+<title>test_nanfunctions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #808080;}
+.s3 { color: #6897bb;}
+.s4 { color: #6a8759;}
+.s5 { color: #629755; font-style: italic;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_nanfunctions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">import </span><span class="s1">pytest</span>
+
+<span class="s0">import </span><span class="s1">numpy </span><span class="s0">as </span><span class="s1">np</span>
+<span class="s0">from </span><span class="s1">numpy.lib.nanfunctions </span><span class="s0">import </span><span class="s1">_nan_mask</span><span class="s0">, </span><span class="s1">_replace_nan</span>
+<span class="s0">from </span><span class="s1">numpy.testing </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">assert_</span><span class="s0">, </span><span class="s1">assert_equal</span><span class="s0">, </span><span class="s1">assert_almost_equal</span><span class="s0">, </span><span class="s1">assert_no_warnings</span><span class="s0">,</span>
+    <span class="s1">assert_raises</span><span class="s0">, </span><span class="s1">assert_array_equal</span><span class="s0">, </span><span class="s1">suppress_warnings</span>
+    <span class="s1">)</span>
+
+
+<span class="s2"># Test data</span>
+<span class="s1">_ndat = np.array([[</span><span class="s3">0.6244</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s3">0.2692</span><span class="s0">, </span><span class="s3">0.0116</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s3">0.1170</span><span class="s1">]</span><span class="s0">,</span>
+                  <span class="s1">[</span><span class="s3">0.5351</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.9403</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s3">0.2100</span><span class="s0">, </span><span class="s3">0.4759</span><span class="s0">, </span><span class="s3">0.2833</span><span class="s1">]</span><span class="s0">,</span>
+                  <span class="s1">[np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s3">0.1042</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.5954</span><span class="s1">]</span><span class="s0">,</span>
+                  <span class="s1">[</span><span class="s3">0.1610</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s3">0.1859</span><span class="s0">, </span><span class="s3">0.3146</span><span class="s0">, </span><span class="s1">np.nan]])</span>
+
+
+<span class="s2"># Rows of _ndat with nans removed</span>
+<span class="s1">_rdat = [np.array([</span><span class="s3">0.6244</span><span class="s0">, </span><span class="s3">0.2692</span><span class="s0">, </span><span class="s3">0.0116</span><span class="s0">, </span><span class="s3">0.1170</span><span class="s1">])</span><span class="s0">,</span>
+         <span class="s1">np.array([</span><span class="s3">0.5351</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.9403</span><span class="s0">, </span><span class="s3">0.2100</span><span class="s0">, </span><span class="s3">0.4759</span><span class="s0">, </span><span class="s3">0.2833</span><span class="s1">])</span><span class="s0">,</span>
+         <span class="s1">np.array([</span><span class="s3">0.1042</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.5954</span><span class="s1">])</span><span class="s0">,</span>
+         <span class="s1">np.array([</span><span class="s3">0.1610</span><span class="s0">, </span><span class="s3">0.1859</span><span class="s0">, </span><span class="s3">0.3146</span><span class="s1">])]</span>
+
+<span class="s2"># Rows of _ndat with nans converted to ones</span>
+<span class="s1">_ndat_ones = np.array([[</span><span class="s3">0.6244</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">0.2692</span><span class="s0">, </span><span class="s3">0.0116</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">0.1170</span><span class="s1">]</span><span class="s0">,</span>
+                       <span class="s1">[</span><span class="s3">0.5351</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.9403</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">0.2100</span><span class="s0">, </span><span class="s3">0.4759</span><span class="s0">, </span><span class="s3">0.2833</span><span class="s1">]</span><span class="s0">,</span>
+                       <span class="s1">[</span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">0.1042</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.5954</span><span class="s1">]</span><span class="s0">,</span>
+                       <span class="s1">[</span><span class="s3">0.1610</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">0.1859</span><span class="s0">, </span><span class="s3">0.3146</span><span class="s0">, </span><span class="s3">1.0</span><span class="s1">]])</span>
+
+<span class="s2"># Rows of _ndat with nans converted to zeros</span>
+<span class="s1">_ndat_zeros = np.array([[</span><span class="s3">0.6244</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.2692</span><span class="s0">, </span><span class="s3">0.0116</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.1170</span><span class="s1">]</span><span class="s0">,</span>
+                        <span class="s1">[</span><span class="s3">0.5351</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.9403</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.2100</span><span class="s0">, </span><span class="s3">0.4759</span><span class="s0">, </span><span class="s3">0.2833</span><span class="s1">]</span><span class="s0">,</span>
+                        <span class="s1">[</span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.1042</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s1">-</span><span class="s3">0.5954</span><span class="s1">]</span><span class="s0">,</span>
+                        <span class="s1">[</span><span class="s3">0.1610</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.0</span><span class="s0">, </span><span class="s3">0.1859</span><span class="s0">, </span><span class="s3">0.3146</span><span class="s0">, </span><span class="s3">0.0</span><span class="s1">]])</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_MinMax:</span>
+
+    <span class="s1">nanfuncs = [np.nanmin</span><span class="s0">, </span><span class="s1">np.nanmax]</span>
+    <span class="s1">stdfuncs = [np.min</span><span class="s0">, </span><span class="s1">np.max]</span>
+
+    <span class="s0">def </span><span class="s1">test_mutation(self):</span>
+        <span class="s2"># Check that passed array is not modified.</span>
+        <span class="s1">ndat = _ndat.copy()</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">f(ndat)</span>
+            <span class="s1">assert_equal(ndat</span><span class="s0">, </span><span class="s1">_ndat)</span>
+
+    <span class="s0">def </span><span class="s1">test_keepdims(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+                <span class="s1">assert_(res.ndim == tgt.ndim)</span>
+
+    <span class="s0">def </span><span class="s1">test_out(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s1">resout = np.zeros(</span><span class="s3">3</span><span class="s1">)</span>
+            <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">out=resout)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_dtype_from_input(self):</span>
+        <span class="s1">codes = </span><span class="s4">'efdgFDG'</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">codes:</span>
+                <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s0">, </span><span class="s1">dtype=c)</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+                <span class="s2"># scalar case</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_result_values(self):</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s1">tgt = [rf(d) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat]</span>
+            <span class="s1">res = nf(_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s1">mat = np.array([np.nan]*</span><span class="s3">9</span><span class="s1">).reshape(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                    <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                    <span class="s1">assert_(np.isnan(f(mat</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s0">, </span><span class="s4">'no warning raised'</span><span class="s1">)</span>
+                    <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+            <span class="s2"># Check scalars</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">assert_(np.isnan(f(np.nan)))</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s0">, </span><span class="s4">'no warning raised'</span><span class="s1">)</span>
+                <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+
+    <span class="s0">def </span><span class="s1">test_masked(self):</span>
+        <span class="s1">mat = np.ma.fix_invalid(_ndat)</span>
+        <span class="s1">msk = mat._mask.copy()</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">[np.nanmin]:</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">tgt = f(_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+            <span class="s1">assert_equal(mat._mask</span><span class="s0">, </span><span class="s1">msk)</span>
+            <span class="s1">assert_(</span><span class="s0">not </span><span class="s1">np.isinf(mat).any())</span>
+
+    <span class="s0">def </span><span class="s1">test_scalar(self):</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">assert_(f(</span><span class="s3">0.</span><span class="s1">) == </span><span class="s3">0.</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_subclass(self):</span>
+        <span class="s0">class </span><span class="s1">MyNDArray(np.ndarray):</span>
+            <span class="s0">pass</span>
+
+        <span class="s2"># Check that it works and that type and</span>
+        <span class="s2"># shape are preserved</span>
+        <span class="s1">mine = np.eye(</span><span class="s3">3</span><span class="s1">).view(MyNDArray)</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == (</span><span class="s3">3</span><span class="s0">,</span><span class="s1">))</span>
+            <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == (</span><span class="s3">3</span><span class="s0">,</span><span class="s1">))</span>
+            <span class="s1">res = f(mine)</span>
+            <span class="s1">assert_(res.shape == ())</span>
+
+        <span class="s2"># check that rows of nan are dealt with for subclasses (#4628)</span>
+        <span class="s1">mine[</span><span class="s3">1</span><span class="s1">] = np.nan</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+                <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+                <span class="s1">assert_(</span><span class="s0">not </span><span class="s1">np.any(np.isnan(res)))</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s1">)</span>
+
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+                <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+                <span class="s1">assert_(np.isnan(res[</span><span class="s3">1</span><span class="s1">]) </span><span class="s0">and not </span><span class="s1">np.isnan(res[</span><span class="s3">0</span><span class="s1">])</span>
+                        <span class="s0">and not </span><span class="s1">np.isnan(res[</span><span class="s3">2</span><span class="s1">]))</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s0">, </span><span class="s4">'no warning raised'</span><span class="s1">)</span>
+                <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">res = f(mine)</span>
+                <span class="s1">assert_(res.shape == ())</span>
+                <span class="s1">assert_(res != np.nan)</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_object_array(self):</span>
+        <span class="s1">arr = np.array([[</span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">2.0</span><span class="s1">]</span><span class="s0">, </span><span class="s1">[np.nan</span><span class="s0">, </span><span class="s3">4.0</span><span class="s1">]</span><span class="s0">, </span><span class="s1">[np.nan</span><span class="s0">, </span><span class="s1">np.nan]]</span><span class="s0">, </span><span class="s1">dtype=object)</span>
+        <span class="s1">assert_equal(np.nanmin(arr)</span><span class="s0">, </span><span class="s3">1.0</span><span class="s1">)</span>
+        <span class="s1">assert_equal(np.nanmin(arr</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[</span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">2.0</span><span class="s1">])</span>
+
+        <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+            <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+            <span class="s2"># assert_equal does not work on object arrays of nan</span>
+            <span class="s1">assert_equal(list(np.nanmin(arr</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">))</span><span class="s0">, </span><span class="s1">[</span><span class="s3">1.0</span><span class="s0">, </span><span class="s3">4.0</span><span class="s0">, </span><span class="s1">np.nan])</span>
+            <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s0">, </span><span class="s4">'no warning raised'</span><span class="s1">)</span>
+            <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_ArgminArgmax:</span>
+
+    <span class="s1">nanfuncs = [np.nanargmin</span><span class="s0">, </span><span class="s1">np.nanargmax]</span>
+
+    <span class="s0">def </span><span class="s1">test_mutation(self):</span>
+        <span class="s2"># Check that passed array is not modified.</span>
+        <span class="s1">ndat = _ndat.copy()</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">f(ndat)</span>
+            <span class="s1">assert_equal(ndat</span><span class="s0">, </span><span class="s1">_ndat)</span>
+
+    <span class="s0">def </span><span class="s1">test_result_values(self):</span>
+        <span class="s0">for </span><span class="s1">f</span><span class="s0">, </span><span class="s1">fcmp </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">[np.greater</span><span class="s0">, </span><span class="s1">np.less]):</span>
+            <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">_ndat:</span>
+                <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+                    <span class="s1">sup.filter(RuntimeWarning</span><span class="s0">, </span><span class="s4">&quot;invalid value encountered in&quot;</span><span class="s1">)</span>
+                    <span class="s1">ind = f(row)</span>
+                    <span class="s1">val = row[ind]</span>
+                    <span class="s2"># comparing with NaN is tricky as the result</span>
+                    <span class="s2"># is always false except for NaN != NaN</span>
+                    <span class="s1">assert_(</span><span class="s0">not </span><span class="s1">np.isnan(val))</span>
+                    <span class="s1">assert_(</span><span class="s0">not </span><span class="s1">fcmp(val</span><span class="s0">, </span><span class="s1">row).any())</span>
+                    <span class="s1">assert_(</span><span class="s0">not </span><span class="s1">np.equal(val</span><span class="s0">, </span><span class="s1">row[:ind]).any())</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s1">mat = np.array([np.nan]*</span><span class="s3">9</span><span class="s1">).reshape(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s1">assert_raises(ValueError</span><span class="s0">, </span><span class="s1">f</span><span class="s0">, </span><span class="s1">mat</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+            <span class="s1">assert_raises(ValueError</span><span class="s0">, </span><span class="s1">f</span><span class="s0">, </span><span class="s1">np.nan)</span>
+
+    <span class="s0">def </span><span class="s1">test_empty(self):</span>
+        <span class="s1">mat = np.zeros((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, None</span><span class="s1">]:</span>
+                <span class="s1">assert_raises(ValueError</span><span class="s0">, </span><span class="s1">f</span><span class="s0">, </span><span class="s1">mat</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+                <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">np.zeros(</span><span class="s3">0</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_scalar(self):</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">assert_(f(</span><span class="s3">0.</span><span class="s1">) == </span><span class="s3">0.</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_subclass(self):</span>
+        <span class="s0">class </span><span class="s1">MyNDArray(np.ndarray):</span>
+            <span class="s0">pass</span>
+
+        <span class="s2"># Check that it works and that type and</span>
+        <span class="s2"># shape are preserved</span>
+        <span class="s1">mine = np.eye(</span><span class="s3">3</span><span class="s1">).view(MyNDArray)</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == (</span><span class="s3">3</span><span class="s0">,</span><span class="s1">))</span>
+            <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == (</span><span class="s3">3</span><span class="s0">,</span><span class="s1">))</span>
+            <span class="s1">res = f(mine)</span>
+            <span class="s1">assert_(res.shape == ())</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_IntTypes:</span>
+
+    <span class="s1">int_types = (np.int8</span><span class="s0">, </span><span class="s1">np.int16</span><span class="s0">, </span><span class="s1">np.int32</span><span class="s0">, </span><span class="s1">np.int64</span><span class="s0">, </span><span class="s1">np.uint8</span><span class="s0">,</span>
+                 <span class="s1">np.uint16</span><span class="s0">, </span><span class="s1">np.uint32</span><span class="s0">, </span><span class="s1">np.uint64)</span>
+
+    <span class="s1">mat = np.array([</span><span class="s3">127</span><span class="s0">, </span><span class="s3">39</span><span class="s0">, </span><span class="s3">93</span><span class="s0">, </span><span class="s3">87</span><span class="s0">, </span><span class="s3">46</span><span class="s1">])</span>
+
+    <span class="s0">def </span><span class="s1">integer_arrays(self):</span>
+        <span class="s0">for </span><span class="s1">dtype </span><span class="s0">in </span><span class="s1">self.int_types:</span>
+            <span class="s0">yield </span><span class="s1">self.mat.astype(dtype)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanmin(self):</span>
+        <span class="s1">tgt = np.min(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanmin(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanmax(self):</span>
+        <span class="s1">tgt = np.max(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanmax(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanargmin(self):</span>
+        <span class="s1">tgt = np.argmin(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanargmin(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanargmax(self):</span>
+        <span class="s1">tgt = np.argmax(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanargmax(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nansum(self):</span>
+        <span class="s1">tgt = np.sum(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nansum(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanprod(self):</span>
+        <span class="s1">tgt = np.prod(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanprod(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nancumsum(self):</span>
+        <span class="s1">tgt = np.cumsum(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nancumsum(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nancumprod(self):</span>
+        <span class="s1">tgt = np.cumprod(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nancumprod(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanmean(self):</span>
+        <span class="s1">tgt = np.mean(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanmean(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanvar(self):</span>
+        <span class="s1">tgt = np.var(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanvar(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+        <span class="s1">tgt = np.var(mat</span><span class="s0">, </span><span class="s1">ddof=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanvar(mat</span><span class="s0">, </span><span class="s1">ddof=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_nanstd(self):</span>
+        <span class="s1">tgt = np.std(self.mat)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanstd(mat)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+        <span class="s1">tgt = np.std(self.mat</span><span class="s0">, </span><span class="s1">ddof=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">mat </span><span class="s0">in </span><span class="s1">self.integer_arrays():</span>
+            <span class="s1">assert_equal(np.nanstd(mat</span><span class="s0">, </span><span class="s1">ddof=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+
+<span class="s0">class </span><span class="s1">SharedNanFunctionsTestsMixin:</span>
+    <span class="s0">def </span><span class="s1">test_mutation(self):</span>
+        <span class="s2"># Check that passed array is not modified.</span>
+        <span class="s1">ndat = _ndat.copy()</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">f(ndat)</span>
+            <span class="s1">assert_equal(ndat</span><span class="s0">, </span><span class="s1">_ndat)</span>
+
+    <span class="s0">def </span><span class="s1">test_keepdims(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+                <span class="s1">assert_(res.ndim == tgt.ndim)</span>
+
+    <span class="s0">def </span><span class="s1">test_out(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s1">resout = np.zeros(</span><span class="s3">3</span><span class="s1">)</span>
+            <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">out=resout)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_dtype_from_dtype(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">codes = </span><span class="s4">'efdgFDG'</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">codes:</span>
+                <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+                    <span class="s0">if </span><span class="s1">nf </span><span class="s0">in </span><span class="s1">{np.nanstd</span><span class="s0">, </span><span class="s1">np.nanvar} </span><span class="s0">and </span><span class="s1">c </span><span class="s0">in </span><span class="s4">'FDG'</span><span class="s1">:</span>
+                        <span class="s2"># Giving the warning is a small bug, see gh-8000</span>
+                        <span class="s1">sup.filter(np.ComplexWarning)</span>
+                    <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">dtype=np.dtype(c)</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                    <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">dtype=np.dtype(c)</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                    <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+                    <span class="s2"># scalar case</span>
+                    <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">dtype=np.dtype(c)</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                    <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">dtype=np.dtype(c)</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                    <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_dtype_from_char(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">codes = </span><span class="s4">'efdgFDG'</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">codes:</span>
+                <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+                    <span class="s0">if </span><span class="s1">nf </span><span class="s0">in </span><span class="s1">{np.nanstd</span><span class="s0">, </span><span class="s1">np.nanvar} </span><span class="s0">and </span><span class="s1">c </span><span class="s0">in </span><span class="s4">'FDG'</span><span class="s1">:</span>
+                        <span class="s2"># Giving the warning is a small bug, see gh-8000</span>
+                        <span class="s1">sup.filter(np.ComplexWarning)</span>
+                    <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">dtype=c</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                    <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">dtype=c</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                    <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+                    <span class="s2"># scalar case</span>
+                    <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">dtype=c</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                    <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">dtype=c</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                    <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_dtype_from_input(self):</span>
+        <span class="s1">codes = </span><span class="s4">'efdgFDG'</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">codes:</span>
+                <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s0">, </span><span class="s1">dtype=c)</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).dtype.type</span>
+                <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt</span><span class="s0">, </span><span class="s4">&quot;res %s, tgt %s&quot; </span><span class="s1">% (res</span><span class="s0">, </span><span class="s1">tgt))</span>
+                <span class="s2"># scalar case</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">).dtype.type</span>
+                <span class="s1">assert_(res </span><span class="s0">is </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_result_values(self):</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s1">tgt = [rf(d) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat]</span>
+            <span class="s1">res = nf(_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_scalar(self):</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">assert_(f(</span><span class="s3">0.</span><span class="s1">) == </span><span class="s3">0.</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_subclass(self):</span>
+        <span class="s0">class </span><span class="s1">MyNDArray(np.ndarray):</span>
+            <span class="s0">pass</span>
+
+        <span class="s2"># Check that it works and that type and</span>
+        <span class="s2"># shape are preserved</span>
+        <span class="s1">array = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">mine = array.view(MyNDArray)</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">expected_shape = f(array</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">).shape</span>
+            <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == expected_shape)</span>
+            <span class="s1">expected_shape = f(array</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">).shape</span>
+            <span class="s1">res = f(mine</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == expected_shape)</span>
+            <span class="s1">expected_shape = f(array).shape</span>
+            <span class="s1">res = f(mine)</span>
+            <span class="s1">assert_(isinstance(res</span><span class="s0">, </span><span class="s1">MyNDArray))</span>
+            <span class="s1">assert_(res.shape == expected_shape)</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_SumProd(SharedNanFunctionsTestsMixin):</span>
+
+    <span class="s1">nanfuncs = [np.nansum</span><span class="s0">, </span><span class="s1">np.nanprod]</span>
+    <span class="s1">stdfuncs = [np.sum</span><span class="s0">, </span><span class="s1">np.prod]</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s2"># Check for FutureWarning</span>
+        <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+            <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+            <span class="s1">res = np.nansum([np.nan]*</span><span class="s3">3</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s1">assert_(res == </span><span class="s3">0</span><span class="s0">, </span><span class="s4">'result is not 0'</span><span class="s1">)</span>
+            <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s0">, </span><span class="s4">'warning raised'</span><span class="s1">)</span>
+            <span class="s2"># Check scalar</span>
+            <span class="s1">res = np.nansum(np.nan)</span>
+            <span class="s1">assert_(res == </span><span class="s3">0</span><span class="s0">, </span><span class="s4">'result is not 0'</span><span class="s1">)</span>
+            <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s0">, </span><span class="s4">'warning raised'</span><span class="s1">)</span>
+            <span class="s2"># Check there is no warning for not all-nan</span>
+            <span class="s1">np.nansum([</span><span class="s3">0</span><span class="s1">]*</span><span class="s3">3</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s0">, </span><span class="s4">'unwanted warning raised'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_empty(self):</span>
+        <span class="s0">for </span><span class="s1">f</span><span class="s0">, </span><span class="s1">tgt_value </span><span class="s0">in </span><span class="s1">zip([np.nansum</span><span class="s0">, </span><span class="s1">np.nanprod]</span><span class="s0">, </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]):</span>
+            <span class="s1">mat = np.zeros((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+            <span class="s1">tgt = [tgt_value]*</span><span class="s3">3</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+            <span class="s1">tgt = []</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+            <span class="s1">tgt = tgt_value</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_CumSumProd(SharedNanFunctionsTestsMixin):</span>
+
+    <span class="s1">nanfuncs = [np.nancumsum</span><span class="s0">, </span><span class="s1">np.nancumprod]</span>
+    <span class="s1">stdfuncs = [np.cumsum</span><span class="s0">, </span><span class="s1">np.cumprod]</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s0">for </span><span class="s1">f</span><span class="s0">, </span><span class="s1">tgt_value </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]):</span>
+            <span class="s2"># Unlike other nan-functions, sum/prod/cumsum/cumprod don't warn on all nan input</span>
+            <span class="s0">with </span><span class="s1">assert_no_warnings():</span>
+                <span class="s1">res = f([np.nan]*</span><span class="s3">3</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+                <span class="s1">tgt = tgt_value*np.ones((</span><span class="s3">3</span><span class="s1">))</span>
+                <span class="s1">assert_(np.array_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span><span class="s0">, </span><span class="s4">'result is not %s * np.ones((3))' </span><span class="s1">% (tgt_value))</span>
+                <span class="s2"># Check scalar</span>
+                <span class="s1">res = f(np.nan)</span>
+                <span class="s1">tgt = tgt_value*np.ones((</span><span class="s3">1</span><span class="s1">))</span>
+                <span class="s1">assert_(np.array_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span><span class="s0">, </span><span class="s4">'result is not %s * np.ones((1))' </span><span class="s1">% (tgt_value))</span>
+                <span class="s2"># Check there is no warning for not all-nan</span>
+                <span class="s1">f([</span><span class="s3">0</span><span class="s1">]*</span><span class="s3">3</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_empty(self):</span>
+        <span class="s0">for </span><span class="s1">f</span><span class="s0">, </span><span class="s1">tgt_value </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]):</span>
+            <span class="s1">mat = np.zeros((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+            <span class="s1">tgt = tgt_value*np.ones((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+            <span class="s1">tgt = mat</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+            <span class="s1">tgt = np.zeros((</span><span class="s3">0</span><span class="s1">))</span>
+            <span class="s1">res = f(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_keepdims(self):</span>
+        <span class="s0">for </span><span class="s1">f</span><span class="s0">, </span><span class="s1">g </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s1">tgt = f(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=</span><span class="s0">None</span><span class="s1">)</span>
+                <span class="s1">res = g(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=</span><span class="s0">None</span><span class="s1">)</span>
+                <span class="s1">assert_(res.ndim == tgt.ndim)</span>
+
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s1">d = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+            <span class="s2"># Randomly set some elements to NaN:</span>
+            <span class="s1">rs = np.random.RandomState(</span><span class="s3">0</span><span class="s1">)</span>
+            <span class="s1">d[rs.rand(*d.shape) &lt; </span><span class="s3">0.5</span><span class="s1">] = np.nan</span>
+            <span class="s1">res = f(d</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1155</span><span class="s0">,</span><span class="s1">))</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">np.arange(</span><span class="s3">4</span><span class="s1">):</span>
+                <span class="s1">res = f(d</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+                <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_result_values(self):</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">(-</span><span class="s3">2</span><span class="s0">, </span><span class="s1">-</span><span class="s3">1</span><span class="s0">, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, None</span><span class="s1">):</span>
+            <span class="s1">tgt = np.cumprod(_ndat_ones</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+            <span class="s1">res = np.nancumprod(_ndat</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+            <span class="s1">tgt = np.cumsum(_ndat_zeros</span><span class="s0">,</span><span class="s1">axis=axis)</span>
+            <span class="s1">res = np.nancumsum(_ndat</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_out(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(self.nanfuncs</span><span class="s0">, </span><span class="s1">self.stdfuncs):</span>
+            <span class="s1">resout = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">(-</span><span class="s3">2</span><span class="s0">, </span><span class="s1">-</span><span class="s3">1</span><span class="s0">, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">):</span>
+                <span class="s1">tgt = rf(mat</span><span class="s0">, </span><span class="s1">axis=axis)</span>
+                <span class="s1">res = nf(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=resout)</span>
+                <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+                <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_MeanVarStd(SharedNanFunctionsTestsMixin):</span>
+
+    <span class="s1">nanfuncs = [np.nanmean</span><span class="s0">, </span><span class="s1">np.nanvar</span><span class="s0">, </span><span class="s1">np.nanstd]</span>
+    <span class="s1">stdfuncs = [np.mean</span><span class="s0">, </span><span class="s1">np.var</span><span class="s0">, </span><span class="s1">np.std]</span>
+
+    <span class="s0">def </span><span class="s1">test_dtype_error(self):</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">dtype </span><span class="s0">in </span><span class="s1">[np.bool_</span><span class="s0">, </span><span class="s1">np.int_</span><span class="s0">, </span><span class="s1">np.object_]:</span>
+                <span class="s1">assert_raises(TypeError</span><span class="s0">, </span><span class="s1">f</span><span class="s0">, </span><span class="s1">_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">dtype=dtype)</span>
+
+    <span class="s0">def </span><span class="s1">test_out_dtype_error(self):</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">dtype </span><span class="s0">in </span><span class="s1">[np.bool_</span><span class="s0">, </span><span class="s1">np.int_</span><span class="s0">, </span><span class="s1">np.object_]:</span>
+                <span class="s1">out = np.empty(_ndat.shape[</span><span class="s3">0</span><span class="s1">]</span><span class="s0">, </span><span class="s1">dtype=dtype)</span>
+                <span class="s1">assert_raises(TypeError</span><span class="s0">, </span><span class="s1">f</span><span class="s0">, </span><span class="s1">_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">out=out)</span>
+
+    <span class="s0">def </span><span class="s1">test_ddof(self):</span>
+        <span class="s1">nanfuncs = [np.nanvar</span><span class="s0">, </span><span class="s1">np.nanstd]</span>
+        <span class="s1">stdfuncs = [np.var</span><span class="s0">, </span><span class="s1">np.std]</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(nanfuncs</span><span class="s0">, </span><span class="s1">stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">ddof </span><span class="s0">in </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s1">tgt = [rf(d</span><span class="s0">, </span><span class="s1">ddof=ddof) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat]</span>
+                <span class="s1">res = nf(_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">ddof=ddof)</span>
+                <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_ddof_too_big(self):</span>
+        <span class="s1">nanfuncs = [np.nanvar</span><span class="s0">, </span><span class="s1">np.nanstd]</span>
+        <span class="s1">stdfuncs = [np.var</span><span class="s0">, </span><span class="s1">np.std]</span>
+        <span class="s1">dsize = [len(d) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat]</span>
+        <span class="s0">for </span><span class="s1">nf</span><span class="s0">, </span><span class="s1">rf </span><span class="s0">in </span><span class="s1">zip(nanfuncs</span><span class="s0">, </span><span class="s1">stdfuncs):</span>
+            <span class="s0">for </span><span class="s1">ddof </span><span class="s0">in </span><span class="s1">range(</span><span class="s3">5</span><span class="s1">):</span>
+                <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+                    <span class="s1">sup.record(RuntimeWarning)</span>
+                    <span class="s1">sup.filter(np.ComplexWarning)</span>
+                    <span class="s1">tgt = [ddof &gt;= d </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">dsize]</span>
+                    <span class="s1">res = nf(_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">ddof=ddof)</span>
+                    <span class="s1">assert_equal(np.isnan(res)</span><span class="s0">, </span><span class="s1">tgt)</span>
+                    <span class="s0">if </span><span class="s1">any(tgt):</span>
+                        <span class="s1">assert_(len(sup.log) == </span><span class="s3">1</span><span class="s1">)</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">assert_(len(sup.log) == </span><span class="s3">0</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s1">mat = np.array([np.nan]*</span><span class="s3">9</span><span class="s1">).reshape(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                    <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                    <span class="s1">assert_(np.isnan(f(mat</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s1">)</span>
+                    <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+                    <span class="s2"># Check scalar</span>
+                    <span class="s1">assert_(np.isnan(f(np.nan)))</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">2</span><span class="s1">)</span>
+                    <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+
+    <span class="s0">def </span><span class="s1">test_empty(self):</span>
+        <span class="s1">mat = np.zeros((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">self.nanfuncs:</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, None</span><span class="s1">]:</span>
+                <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                    <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                    <span class="s1">assert_(np.isnan(f(mat</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s1">)</span>
+                    <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+            <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">1</span><span class="s1">]:</span>
+                <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                    <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                    <span class="s1">assert_equal(f(mat</span><span class="s0">, </span><span class="s1">axis=axis)</span><span class="s0">, </span><span class="s1">np.zeros([]))</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_Median:</span>
+
+    <span class="s0">def </span><span class="s1">test_mutation(self):</span>
+        <span class="s2"># Check that passed array is not modified.</span>
+        <span class="s1">ndat = _ndat.copy()</span>
+        <span class="s1">np.nanmedian(ndat)</span>
+        <span class="s1">assert_equal(ndat</span><span class="s0">, </span><span class="s1">_ndat)</span>
+
+    <span class="s0">def </span><span class="s1">test_keepdims(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s1">tgt = np.median(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=</span><span class="s0">None, </span><span class="s1">overwrite_input=</span><span class="s0">False</span><span class="s1">)</span>
+            <span class="s1">res = np.nanmedian(mat</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=</span><span class="s0">None, </span><span class="s1">overwrite_input=</span><span class="s0">False</span><span class="s1">)</span>
+            <span class="s1">assert_(res.ndim == tgt.ndim)</span>
+
+        <span class="s1">d = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+        <span class="s2"># Randomly set some elements to NaN:</span>
+        <span class="s1">w = np.random.random((</span><span class="s3">4</span><span class="s0">, </span><span class="s3">200</span><span class="s1">)) * np.array(d.shape)[:</span><span class="s0">, None</span><span class="s1">]</span>
+        <span class="s1">w = w.astype(np.intp)</span>
+        <span class="s1">d[tuple(w)] = np.nan</span>
+        <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+            <span class="s1">sup.filter(RuntimeWarning)</span>
+            <span class="s1">res = np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+            <span class="s1">res = np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+            <span class="s1">res = np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+            <span class="s1">res = np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">1</span><span class="s0">,</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+            <span class="s1">res = np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">2</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+            <span class="s1">res = np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_out(self):</span>
+        <span class="s1">mat = np.random.rand(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">nan_mat = np.insert(mat</span><span class="s0">, </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, </span><span class="s3">2</span><span class="s1">]</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">resout = np.zeros(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">tgt = np.median(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">res = np.nanmedian(nan_mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">out=resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+        <span class="s2"># 0-d output:</span>
+        <span class="s1">resout = np.zeros(())</span>
+        <span class="s1">tgt = np.median(mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+        <span class="s1">res = np.nanmedian(nan_mat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None, </span><span class="s1">out=resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+        <span class="s1">res = np.nanmedian(nan_mat</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">out=resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_small_large(self):</span>
+        <span class="s2"># test the small and large code paths, current cutoff 400 elements</span>
+        <span class="s0">for </span><span class="s1">s </span><span class="s0">in </span><span class="s1">[</span><span class="s3">5</span><span class="s0">, </span><span class="s3">20</span><span class="s0">, </span><span class="s3">51</span><span class="s0">, </span><span class="s3">200</span><span class="s0">, </span><span class="s3">1000</span><span class="s1">]:</span>
+            <span class="s1">d = np.random.randn(</span><span class="s3">4</span><span class="s0">, </span><span class="s1">s)</span>
+            <span class="s2"># Randomly set some elements to NaN:</span>
+            <span class="s1">w = np.random.randint(</span><span class="s3">0</span><span class="s0">, </span><span class="s1">d.size</span><span class="s0">, </span><span class="s1">size=d.size // </span><span class="s3">5</span><span class="s1">)</span>
+            <span class="s1">d.ravel()[w] = np.nan</span>
+            <span class="s1">d[:</span><span class="s0">,</span><span class="s3">0</span><span class="s1">] = </span><span class="s3">1.  </span><span class="s2"># ensure at least one good value</span>
+            <span class="s2"># use normal median without nans to compare</span>
+            <span class="s1">tgt = []</span>
+            <span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">d:</span>
+                <span class="s1">nonan = np.compress(~np.isnan(x)</span><span class="s0">, </span><span class="s1">x)</span>
+                <span class="s1">tgt.append(np.median(nonan</span><span class="s0">, </span><span class="s1">overwrite_input=</span><span class="s0">True</span><span class="s1">))</span>
+
+            <span class="s1">assert_array_equal(np.nanmedian(d</span><span class="s0">, </span><span class="s1">axis=-</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_result_values(self):</span>
+            <span class="s1">tgt = [np.median(d) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat]</span>
+            <span class="s1">res = np.nanmedian(_ndat</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s1">mat = np.array([np.nan]*</span><span class="s3">9</span><span class="s1">).reshape(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+                <span class="s1">sup.record(RuntimeWarning)</span>
+
+                <span class="s1">assert_(np.isnan(np.nanmedian(mat</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                <span class="s0">if </span><span class="s1">axis </span><span class="s0">is None</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(sup.log) == </span><span class="s3">1</span><span class="s1">)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(sup.log) == </span><span class="s3">3</span><span class="s1">)</span>
+                <span class="s2"># Check scalar</span>
+                <span class="s1">assert_(np.isnan(np.nanmedian(np.nan)))</span>
+                <span class="s0">if </span><span class="s1">axis </span><span class="s0">is None</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(sup.log) == </span><span class="s3">2</span><span class="s1">)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(sup.log) == </span><span class="s3">4</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_empty(self):</span>
+        <span class="s1">mat = np.zeros((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, None</span><span class="s1">]:</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">assert_(np.isnan(np.nanmedian(mat</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s1">)</span>
+                <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">assert_equal(np.nanmedian(mat</span><span class="s0">, </span><span class="s1">axis=axis)</span><span class="s0">, </span><span class="s1">np.zeros([]))</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_scalar(self):</span>
+        <span class="s1">assert_(np.nanmedian(</span><span class="s3">0.</span><span class="s1">) == </span><span class="s3">0.</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_extended_axis_invalid(self):</span>
+        <span class="s1">d = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanmedian</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">axis=-</span><span class="s3">5</span><span class="s1">)</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanmedian</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s1">-</span><span class="s3">5</span><span class="s1">))</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanmedian</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">4</span><span class="s1">)</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanmedian</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">4</span><span class="s1">))</span>
+        <span class="s1">assert_raises(ValueError</span><span class="s0">, </span><span class="s1">np.nanmedian</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_float_special(self):</span>
+        <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+            <span class="s1">sup.filter(RuntimeWarning)</span>
+            <span class="s0">for </span><span class="s1">inf </span><span class="s0">in </span><span class="s1">[np.inf</span><span class="s0">, </span><span class="s1">-np.inf]:</span>
+                <span class="s1">a = np.array([[inf</span><span class="s0">,  </span><span class="s1">np.nan]</span><span class="s0">, </span><span class="s1">[np.nan</span><span class="s0">, </span><span class="s1">np.nan]])</span>
+                <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[inf</span><span class="s0">,  </span><span class="s1">np.nan])</span>
+                <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[inf</span><span class="s0">,  </span><span class="s1">np.nan])</span>
+                <span class="s1">assert_equal(np.nanmedian(a)</span><span class="s0">, </span><span class="s1">inf)</span>
+
+                <span class="s2"># minimum fill value check</span>
+                <span class="s1">a = np.array([[np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">inf]</span><span class="s0">,</span>
+                             <span class="s1">[np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">inf]])</span>
+                <span class="s1">assert_equal(np.nanmedian(a)</span><span class="s0">, </span><span class="s1">inf)</span>
+                <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">inf])</span>
+                <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">inf)</span>
+
+                <span class="s2"># no mask path</span>
+                <span class="s1">a = np.array([[inf</span><span class="s0">, </span><span class="s1">inf]</span><span class="s0">, </span><span class="s1">[inf</span><span class="s0">, </span><span class="s1">inf]])</span>
+                <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">inf)</span>
+
+                <span class="s1">a = np.array([[inf</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s1">-inf</span><span class="s0">, </span><span class="s1">-</span><span class="s3">9</span><span class="s1">]</span><span class="s0">,</span>
+                              <span class="s1">[-</span><span class="s3">10</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s3">5</span><span class="s1">]</span><span class="s0">,</span>
+                              <span class="s1">[</span><span class="s3">4</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">inf]]</span><span class="s0">,</span>
+                              <span class="s1">dtype=np.float32)</span>
+                <span class="s0">if </span><span class="s1">inf &gt; </span><span class="s3">0</span><span class="s1">:</span>
+                    <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[</span><span class="s3">4.</span><span class="s0">, </span><span class="s3">7.</span><span class="s0">, </span><span class="s1">-inf</span><span class="s0">, </span><span class="s3">5.</span><span class="s1">])</span>
+                    <span class="s1">assert_equal(np.nanmedian(a)</span><span class="s0">, </span><span class="s3">4.5</span><span class="s1">)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[-</span><span class="s3">10.</span><span class="s0">, </span><span class="s3">7.</span><span class="s0">, </span><span class="s1">-inf</span><span class="s0">, </span><span class="s1">-</span><span class="s3">9.</span><span class="s1">])</span>
+                    <span class="s1">assert_equal(np.nanmedian(a)</span><span class="s0">, </span><span class="s1">-</span><span class="s3">2.5</span><span class="s1">)</span>
+                <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=-</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">[-</span><span class="s3">1.</span><span class="s0">, </span><span class="s1">-</span><span class="s3">2.5</span><span class="s0">, </span><span class="s1">inf])</span>
+
+                <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">10</span><span class="s1">):</span>
+                    <span class="s0">for </span><span class="s1">j </span><span class="s0">in </span><span class="s1">range(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">10</span><span class="s1">):</span>
+                        <span class="s1">a = np.array([([np.nan] * i) + ([inf] * j)] * </span><span class="s3">2</span><span class="s1">)</span>
+                        <span class="s1">assert_equal(np.nanmedian(a)</span><span class="s0">, </span><span class="s1">inf)</span>
+                        <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">inf)</span>
+                        <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">,</span>
+                                     <span class="s1">([np.nan] * i) + [inf] * j)</span>
+
+                        <span class="s1">a = np.array([([np.nan] * i) + ([-inf] * j)] * </span><span class="s3">2</span><span class="s1">)</span>
+                        <span class="s1">assert_equal(np.nanmedian(a)</span><span class="s0">, </span><span class="s1">-inf)</span>
+                        <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">-inf)</span>
+                        <span class="s1">assert_equal(np.nanmedian(a</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">,</span>
+                                     <span class="s1">([np.nan] * i) + [-inf] * j)</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_Percentile:</span>
+
+    <span class="s0">def </span><span class="s1">test_mutation(self):</span>
+        <span class="s2"># Check that passed array is not modified.</span>
+        <span class="s1">ndat = _ndat.copy()</span>
+        <span class="s1">np.nanpercentile(ndat</span><span class="s0">, </span><span class="s3">30</span><span class="s1">)</span>
+        <span class="s1">assert_equal(ndat</span><span class="s0">, </span><span class="s1">_ndat)</span>
+
+    <span class="s0">def </span><span class="s1">test_keepdims(self):</span>
+        <span class="s1">mat = np.eye(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s1">tgt = np.percentile(mat</span><span class="s0">, </span><span class="s3">70</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=</span><span class="s0">None,</span>
+                                <span class="s1">overwrite_input=</span><span class="s0">False</span><span class="s1">)</span>
+            <span class="s1">res = np.nanpercentile(mat</span><span class="s0">, </span><span class="s3">70</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">out=</span><span class="s0">None,</span>
+                                   <span class="s1">overwrite_input=</span><span class="s0">False</span><span class="s1">)</span>
+            <span class="s1">assert_(res.ndim == tgt.ndim)</span>
+
+        <span class="s1">d = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+        <span class="s2"># Randomly set some elements to NaN:</span>
+        <span class="s1">w = np.random.random((</span><span class="s3">4</span><span class="s0">, </span><span class="s3">200</span><span class="s1">)) * np.array(d.shape)[:</span><span class="s0">, None</span><span class="s1">]</span>
+        <span class="s1">w = w.astype(np.intp)</span>
+        <span class="s1">d[tuple(w)] = np.nan</span>
+        <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+            <span class="s1">sup.filter(RuntimeWarning)</span>
+            <span class="s1">res = np.nanpercentile(d</span><span class="s0">, </span><span class="s3">90</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+            <span class="s1">res = np.nanpercentile(d</span><span class="s0">, </span><span class="s3">90</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+            <span class="s1">res = np.nanpercentile(d</span><span class="s0">, </span><span class="s3">90</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+            <span class="s1">res = np.nanpercentile(d</span><span class="s0">, </span><span class="s3">90</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">1</span><span class="s0">,</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+            <span class="s1">res = np.nanpercentile(d</span><span class="s0">, </span><span class="s3">90</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">2</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+            <span class="s1">res = np.nanpercentile(d</span><span class="s0">, </span><span class="s3">90</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span><span class="s0">, </span><span class="s1">keepdims=</span><span class="s0">True</span><span class="s1">)</span>
+            <span class="s1">assert_equal(res.shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_out(self):</span>
+        <span class="s1">mat = np.random.rand(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">nan_mat = np.insert(mat</span><span class="s0">, </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, </span><span class="s3">2</span><span class="s1">]</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">resout = np.zeros(</span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s1">tgt = np.percentile(mat</span><span class="s0">, </span><span class="s3">42</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">res = np.nanpercentile(nan_mat</span><span class="s0">, </span><span class="s3">42</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s0">, </span><span class="s1">out=resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+        <span class="s2"># 0-d output:</span>
+        <span class="s1">resout = np.zeros(())</span>
+        <span class="s1">tgt = np.percentile(mat</span><span class="s0">, </span><span class="s3">42</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None</span><span class="s1">)</span>
+        <span class="s1">res = np.nanpercentile(nan_mat</span><span class="s0">, </span><span class="s3">42</span><span class="s0">, </span><span class="s1">axis=</span><span class="s0">None, </span><span class="s1">out=resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+        <span class="s1">res = np.nanpercentile(nan_mat</span><span class="s0">, </span><span class="s3">42</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s1">out=resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">resout)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_result_values(self):</span>
+        <span class="s1">tgt = [np.percentile(d</span><span class="s0">, </span><span class="s3">28</span><span class="s1">) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat]</span>
+        <span class="s1">res = np.nanpercentile(_ndat</span><span class="s0">, </span><span class="s3">28</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+        <span class="s2"># Transpose the array to fit the output convention of numpy.percentile</span>
+        <span class="s1">tgt = np.transpose([np.percentile(d</span><span class="s0">, </span><span class="s1">(</span><span class="s3">28</span><span class="s0">, </span><span class="s3">98</span><span class="s1">)) </span><span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">_rdat])</span>
+        <span class="s1">res = np.nanpercentile(_ndat</span><span class="s0">, </span><span class="s1">(</span><span class="s3">28</span><span class="s0">, </span><span class="s3">98</span><span class="s1">)</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">assert_almost_equal(res</span><span class="s0">, </span><span class="s1">tgt)</span>
+
+    <span class="s0">def </span><span class="s1">test_allnans(self):</span>
+        <span class="s1">mat = np.array([np.nan]*</span><span class="s3">9</span><span class="s1">).reshape(</span><span class="s3">3</span><span class="s0">, </span><span class="s3">3</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">assert_(np.isnan(np.nanpercentile(mat</span><span class="s0">, </span><span class="s3">60</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                <span class="s0">if </span><span class="s1">axis </span><span class="s0">is None</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s1">)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">3</span><span class="s1">)</span>
+                <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+                <span class="s2"># Check scalar</span>
+                <span class="s1">assert_(np.isnan(np.nanpercentile(np.nan</span><span class="s0">, </span><span class="s3">60</span><span class="s1">)))</span>
+                <span class="s0">if </span><span class="s1">axis </span><span class="s0">is None</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">2</span><span class="s1">)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">assert_(len(w) == </span><span class="s3">4</span><span class="s1">)</span>
+                <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+
+    <span class="s0">def </span><span class="s1">test_empty(self):</span>
+        <span class="s1">mat = np.zeros((</span><span class="s3">0</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">0</span><span class="s0">, None</span><span class="s1">]:</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">assert_(np.isnan(np.nanpercentile(mat</span><span class="s0">, </span><span class="s3">40</span><span class="s0">, </span><span class="s1">axis=axis)).all())</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">1</span><span class="s1">)</span>
+                <span class="s1">assert_(issubclass(w[</span><span class="s3">0</span><span class="s1">].category</span><span class="s0">, </span><span class="s1">RuntimeWarning))</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s0">with </span><span class="s1">warnings.catch_warnings(record=</span><span class="s0">True</span><span class="s1">) </span><span class="s0">as </span><span class="s1">w:</span>
+                <span class="s1">warnings.simplefilter(</span><span class="s4">'always'</span><span class="s1">)</span>
+                <span class="s1">assert_equal(np.nanpercentile(mat</span><span class="s0">, </span><span class="s3">40</span><span class="s0">, </span><span class="s1">axis=axis)</span><span class="s0">, </span><span class="s1">np.zeros([]))</span>
+                <span class="s1">assert_(len(w) == </span><span class="s3">0</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_scalar(self):</span>
+        <span class="s1">assert_equal(np.nanpercentile(</span><span class="s3">0.</span><span class="s0">, </span><span class="s3">100</span><span class="s1">)</span><span class="s0">, </span><span class="s3">0.</span><span class="s1">)</span>
+        <span class="s1">a = np.arange(</span><span class="s3">6</span><span class="s1">)</span>
+        <span class="s1">r = np.nanpercentile(a</span><span class="s0">, </span><span class="s3">50</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s1">assert_equal(r</span><span class="s0">, </span><span class="s3">2.5</span><span class="s1">)</span>
+        <span class="s1">assert_(np.isscalar(r))</span>
+
+    <span class="s0">def </span><span class="s1">test_extended_axis_invalid(self):</span>
+        <span class="s1">d = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">11</span><span class="s1">))</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanpercentile</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">5</span><span class="s0">, </span><span class="s1">axis=-</span><span class="s3">5</span><span class="s1">)</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanpercentile</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">5</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s1">-</span><span class="s3">5</span><span class="s1">))</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanpercentile</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">5</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">4</span><span class="s1">)</span>
+        <span class="s1">assert_raises(np.AxisError</span><span class="s0">, </span><span class="s1">np.nanpercentile</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">5</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">0</span><span class="s0">, </span><span class="s3">4</span><span class="s1">))</span>
+        <span class="s1">assert_raises(ValueError</span><span class="s0">, </span><span class="s1">np.nanpercentile</span><span class="s0">, </span><span class="s1">d</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">5</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">1</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_multiple_percentiles(self):</span>
+        <span class="s1">perc = [</span><span class="s3">50</span><span class="s0">, </span><span class="s3">100</span><span class="s1">]</span>
+        <span class="s1">mat = np.ones((</span><span class="s3">4</span><span class="s0">, </span><span class="s3">3</span><span class="s1">))</span>
+        <span class="s1">nan_mat = np.nan * mat</span>
+        <span class="s2"># For checking consistency in higher dimensional case</span>
+        <span class="s1">large_mat = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">4</span><span class="s0">, </span><span class="s3">5</span><span class="s1">))</span>
+        <span class="s1">large_mat[:</span><span class="s0">, </span><span class="s3">0</span><span class="s1">:</span><span class="s3">2</span><span class="s1">:</span><span class="s3">4</span><span class="s0">, </span><span class="s1">:] = </span><span class="s3">0</span>
+        <span class="s1">large_mat[:</span><span class="s0">, </span><span class="s1">:</span><span class="s0">, </span><span class="s3">3</span><span class="s1">:] *= </span><span class="s3">2</span>
+        <span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s0">for </span><span class="s1">keepdim </span><span class="s0">in </span><span class="s1">[</span><span class="s0">False, True</span><span class="s1">]:</span>
+                <span class="s0">with </span><span class="s1">suppress_warnings() </span><span class="s0">as </span><span class="s1">sup:</span>
+                    <span class="s1">sup.filter(RuntimeWarning</span><span class="s0">, </span><span class="s4">&quot;All-NaN slice encountered&quot;</span><span class="s1">)</span>
+                    <span class="s1">val = np.percentile(mat</span><span class="s0">, </span><span class="s1">perc</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">, </span><span class="s1">keepdims=keepdim)</span>
+                    <span class="s1">nan_val = np.nanpercentile(nan_mat</span><span class="s0">, </span><span class="s1">perc</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">,</span>
+                                               <span class="s1">keepdims=keepdim)</span>
+                    <span class="s1">assert_equal(nan_val.shape</span><span class="s0">, </span><span class="s1">val.shape)</span>
+
+                    <span class="s1">val = np.percentile(large_mat</span><span class="s0">, </span><span class="s1">perc</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">,</span>
+                                        <span class="s1">keepdims=keepdim)</span>
+                    <span class="s1">nan_val = np.nanpercentile(large_mat</span><span class="s0">, </span><span class="s1">perc</span><span class="s0">, </span><span class="s1">axis=axis</span><span class="s0">,</span>
+                                               <span class="s1">keepdims=keepdim)</span>
+                    <span class="s1">assert_equal(nan_val</span><span class="s0">, </span><span class="s1">val)</span>
+
+        <span class="s1">megamat = np.ones((</span><span class="s3">3</span><span class="s0">, </span><span class="s3">4</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">6</span><span class="s1">))</span>
+        <span class="s1">assert_equal(np.nanpercentile(megamat</span><span class="s0">, </span><span class="s1">perc</span><span class="s0">, </span><span class="s1">axis=(</span><span class="s3">1</span><span class="s0">, </span><span class="s3">2</span><span class="s1">)).shape</span><span class="s0">, </span><span class="s1">(</span><span class="s3">2</span><span class="s0">, </span><span class="s3">3</span><span class="s0">, </span><span class="s3">6</span><span class="s1">))</span>
+
+
+<span class="s0">class </span><span class="s1">TestNanFunctions_Quantile:</span>
+    <span class="s2"># most of this is already tested by TestPercentile</span>
+
+    <span class="s0">def </span><span class="s1">test_regression(self):</span>
+        <span class="s1">ar = np.arange(</span><span class="s3">24</span><span class="s1">).reshape(</span><span class="s3">2</span><span class="s0">, </span><span class="s3">3</span><span class="s0">, </span><span class="s3">4</span><span class="s1">).astype(float)</span>
+        <span class="s1">ar[</span><span class="s3">0</span><span class="s1">][</span><span class="s3">1</span><span class="s1">] = np.nan</span>
+
+        <span class="s1">assert_equal(np.nanquantile(ar</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">0.5</span><span class="s1">)</span><span class="s0">, </span><span class="s1">np.nanpercentile(ar</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">50</span><span class="s1">))</span>
+        <span class="s1">assert_equal(np.nanquantile(ar</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">0.5</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">)</span><span class="s0">,</span>
+                     <span class="s1">np.nanpercentile(ar</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">50</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">0</span><span class="s1">))</span>
+        <span class="s1">assert_equal(np.nanquantile(ar</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">0.5</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">,</span>
+                     <span class="s1">np.nanpercentile(ar</span><span class="s0">, </span><span class="s1">q=</span><span class="s3">50</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">))</span>
+        <span class="s1">assert_equal(np.nanquantile(ar</span><span class="s0">, </span><span class="s1">q=[</span><span class="s3">0.5</span><span class="s1">]</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">,</span>
+                     <span class="s1">np.nanpercentile(ar</span><span class="s0">, </span><span class="s1">q=[</span><span class="s3">50</span><span class="s1">]</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">))</span>
+        <span class="s1">assert_equal(np.nanquantile(ar</span><span class="s0">, </span><span class="s1">q=[</span><span class="s3">0.25</span><span class="s0">, </span><span class="s3">0.5</span><span class="s0">, </span><span class="s3">0.75</span><span class="s1">]</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span><span class="s0">,</span>
+                     <span class="s1">np.nanpercentile(ar</span><span class="s0">, </span><span class="s1">q=[</span><span class="s3">25</span><span class="s0">, </span><span class="s3">50</span><span class="s0">, </span><span class="s3">75</span><span class="s1">]</span><span class="s0">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">))</span>
+
+    <span class="s0">def </span><span class="s1">test_basic(self):</span>
+        <span class="s1">x = np.arange(</span><span class="s3">8</span><span class="s1">) * </span><span class="s3">0.5</span>
+        <span class="s1">assert_equal(np.nanquantile(x</span><span class="s0">, </span><span class="s3">0</span><span class="s1">)</span><span class="s0">, </span><span class="s3">0.</span><span class="s1">)</span>
+        <span class="s1">assert_equal(np.nanquantile(x</span><span class="s0">, </span><span class="s3">1</span><span class="s1">)</span><span class="s0">, </span><span class="s3">3.5</span><span class="s1">)</span>
+        <span class="s1">assert_equal(np.nanquantile(x</span><span class="s0">, </span><span class="s3">0.5</span><span class="s1">)</span><span class="s0">, </span><span class="s3">1.75</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">test_no_p_overwrite(self):</span>
+        <span class="s2"># this is worth retesting, because quantile does not make a copy</span>
+        <span class="s1">p0 = np.array([</span><span class="s3">0</span><span class="s0">, </span><span class="s3">0.75</span><span class="s0">, </span><span class="s3">0.25</span><span class="s0">, </span><span class="s3">0.5</span><span class="s0">, </span><span class="s3">1.0</span><span class="s1">])</span>
+        <span class="s1">p = p0.copy()</span>
+        <span class="s1">np.nanquantile(np.arange(</span><span class="s3">100.</span><span class="s1">)</span><span class="s0">, </span><span class="s1">p</span><span class="s0">, </span><span class="s1">interpolation=</span><span class="s4">&quot;midpoint&quot;</span><span class="s1">)</span>
+        <span class="s1">assert_array_equal(p</span><span class="s0">, </span><span class="s1">p0)</span>
+
+        <span class="s1">p0 = p0.tolist()</span>
+        <span class="s1">p = p.tolist()</span>
+        <span class="s1">np.nanquantile(np.arange(</span><span class="s3">100.</span><span class="s1">)</span><span class="s0">, </span><span class="s1">p</span><span class="s0">, </span><span class="s1">interpolation=</span><span class="s4">&quot;midpoint&quot;</span><span class="s1">)</span>
+        <span class="s1">assert_array_equal(p</span><span class="s0">, </span><span class="s1">p0)</span>
+
+<span class="s1">@pytest.mark.parametrize(</span><span class="s4">&quot;arr, expected&quot;</span><span class="s0">, </span><span class="s1">[</span>
+    <span class="s2"># array of floats with some nans</span>
+    <span class="s1">(np.array([np.nan</span><span class="s0">, </span><span class="s3">5.0</span><span class="s0">, </span><span class="s1">np.nan</span><span class="s0">, </span><span class="s1">np.inf])</span><span class="s0">,</span>
+     <span class="s1">np.array([</span><span class="s0">False, True, False, True</span><span class="s1">]))</span><span class="s0">,</span>
+    <span class="s2"># int64 array that can't possibly have nans</span>
+    <span class="s1">(np.array([</span><span class="s3">1</span><span class="s0">, </span><span class="s3">5</span><span class="s0">, </span><span class="s3">7</span><span class="s0">, </span><span class="s3">9</span><span class="s1">]</span><span class="s0">, </span><span class="s1">dtype=np.int64)</span><span class="s0">,</span>
+     <span class="s0">True</span><span class="s1">)</span><span class="s0">,</span>
+    <span class="s2"># bool array that can't possibly have nans</span>
+    <span class="s1">(np.array([</span><span class="s0">False, True, False, True</span><span class="s1">])</span><span class="s0">,</span>
+     <span class="s0">True</span><span class="s1">)</span><span class="s0">,</span>
+    <span class="s2"># 2-D complex array with nans</span>
+    <span class="s1">(np.array([[np.nan</span><span class="s0">, </span><span class="s3">5.0</span><span class="s1">]</span><span class="s0">,</span>
+               <span class="s1">[np.nan</span><span class="s0">, </span><span class="s1">np.inf]]</span><span class="s0">, </span><span class="s1">dtype=np.complex64)</span><span class="s0">,</span>
+     <span class="s1">np.array([[</span><span class="s0">False, True</span><span class="s1">]</span><span class="s0">,</span>
+               <span class="s1">[</span><span class="s0">False, True</span><span class="s1">]]))</span><span class="s0">,</span>
+    <span class="s1">])</span>
+<span class="s0">def </span><span class="s1">test__nan_mask(arr</span><span class="s0">, </span><span class="s1">expected):</span>
+    <span class="s0">for </span><span class="s1">out </span><span class="s0">in </span><span class="s1">[</span><span class="s0">None, </span><span class="s1">np.empty(arr.shape</span><span class="s0">, </span><span class="s1">dtype=np.bool_)]:</span>
+        <span class="s1">actual = _nan_mask(arr</span><span class="s0">, </span><span class="s1">out=out)</span>
+        <span class="s1">assert_equal(actual</span><span class="s0">, </span><span class="s1">expected)</span>
+        <span class="s2"># the above won't distinguish between True proper</span>
+        <span class="s2"># and an array of True values; we want True proper</span>
+        <span class="s2"># for types that can't possibly contain NaN</span>
+        <span class="s0">if </span><span class="s1">type(expected) </span><span class="s0">is not </span><span class="s1">np.ndarray:</span>
+            <span class="s0">assert </span><span class="s1">actual </span><span class="s0">is True</span>
+
+
+<span class="s0">def </span><span class="s1">test__replace_nan():</span>
+    <span class="s5">&quot;&quot;&quot; Test that _replace_nan returns the original array if there are no 
+    NaNs, not a copy. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">for </span><span class="s1">dtype </span><span class="s0">in </span><span class="s1">[np.bool_</span><span class="s0">, </span><span class="s1">np.int32</span><span class="s0">, </span><span class="s1">np.int64]:</span>
+        <span class="s1">arr = np.array([</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]</span><span class="s0">, </span><span class="s1">dtype=dtype)</span>
+        <span class="s1">result</span><span class="s0">, </span><span class="s1">mask = _replace_nan(arr</span><span class="s0">, </span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s0">assert </span><span class="s1">mask </span><span class="s0">is None</span>
+        <span class="s2"># do not make a copy if there are no nans</span>
+        <span class="s0">assert </span><span class="s1">result </span><span class="s0">is </span><span class="s1">arr</span>
+
+    <span class="s0">for </span><span class="s1">dtype </span><span class="s0">in </span><span class="s1">[np.float32</span><span class="s0">, </span><span class="s1">np.float64]:</span>
+        <span class="s1">arr = np.array([</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s1">]</span><span class="s0">, </span><span class="s1">dtype=dtype)</span>
+        <span class="s1">result</span><span class="s0">, </span><span class="s1">mask = _replace_nan(arr</span><span class="s0">, </span><span class="s3">2</span><span class="s1">)</span>
+        <span class="s0">assert </span><span class="s1">(mask == </span><span class="s0">False</span><span class="s1">).all()</span>
+        <span class="s2"># mask is not None, so we make a copy</span>
+        <span class="s0">assert </span><span class="s1">result </span><span class="s0">is not </span><span class="s1">arr</span>
+        <span class="s1">assert_equal(result</span><span class="s0">, </span><span class="s1">arr)</span>
+
+        <span class="s1">arr_nan = np.array([</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s1">np.nan]</span><span class="s0">, </span><span class="s1">dtype=dtype)</span>
+        <span class="s1">result_nan</span><span class="s0">, </span><span class="s1">mask_nan = _replace_nan(arr_nan</span><span class="s0">, </span><span class="s3">2</span><span class="s1">)</span>
+        <span class="s1">assert_equal(mask_nan</span><span class="s0">, </span><span class="s1">np.array([</span><span class="s0">False, False, True</span><span class="s1">]))</span>
+        <span class="s0">assert </span><span class="s1">result_nan </span><span class="s0">is not </span><span class="s1">arr_nan</span>
+        <span class="s1">assert_equal(result_nan</span><span class="s0">, </span><span class="s1">np.array([</span><span class="s3">0</span><span class="s0">, </span><span class="s3">1</span><span class="s0">, </span><span class="s3">2</span><span class="s1">]))</span>
+        <span class="s0">assert </span><span class="s1">np.isnan(arr_nan[-</span><span class="s3">1</span><span class="s1">])</span>
+</pre>
+</body>
+</html>

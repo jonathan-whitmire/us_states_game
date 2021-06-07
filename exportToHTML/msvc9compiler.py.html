@@ -1,0 +1,85 @@
+<html>
+<head>
+<title>msvc9compiler.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #629755; font-style: italic;}
+.s3 { color: #808080;}
+.s4 { color: #6a8759;}
+.s5 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+msvc9compiler.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">from </span><span class="s1">distutils.msvc9compiler </span><span class="s0">import </span><span class="s1">MSVCCompiler </span><span class="s0">as </span><span class="s1">_MSVCCompiler</span>
+
+<span class="s0">from </span><span class="s1">.system_info </span><span class="s0">import </span><span class="s1">platform_bits</span>
+
+
+<span class="s0">def </span><span class="s1">_merge(old</span><span class="s0">, </span><span class="s1">new):</span>
+    <span class="s2">&quot;&quot;&quot;Concatenate two environment paths avoiding repeats. 
+ 
+    Here `old` is the environment string before the base class initialize 
+    function is called and `new` is the string after the call. The new string 
+    will be a fixed string if it is not obtained from the current environment, 
+    or the same as the old string if obtained from the same environment. The aim 
+    here is not to append the new string if it is already contained in the old 
+    string so as to limit the growth of the environment string. 
+ 
+    Parameters 
+    ---------- 
+    old : string 
+        Previous environment string. 
+    new : string 
+        New environment string. 
+ 
+    Returns 
+    ------- 
+    ret : string 
+        Updated environment string. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if not </span><span class="s1">old:</span>
+        <span class="s0">return </span><span class="s1">new</span>
+    <span class="s0">if </span><span class="s1">new </span><span class="s0">in </span><span class="s1">old:</span>
+        <span class="s0">return </span><span class="s1">old</span>
+
+    <span class="s3"># Neither new nor old is empty. Give old priority.</span>
+    <span class="s0">return </span><span class="s4">';'</span><span class="s1">.join([old</span><span class="s0">, </span><span class="s1">new])</span>
+
+
+<span class="s0">class </span><span class="s1">MSVCCompiler(_MSVCCompiler):</span>
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s0">, </span><span class="s1">verbose=</span><span class="s5">0</span><span class="s0">, </span><span class="s1">dry_run=</span><span class="s5">0</span><span class="s0">, </span><span class="s1">force=</span><span class="s5">0</span><span class="s1">):</span>
+        <span class="s1">_MSVCCompiler.__init__(self</span><span class="s0">, </span><span class="s1">verbose</span><span class="s0">, </span><span class="s1">dry_run</span><span class="s0">, </span><span class="s1">force)</span>
+
+    <span class="s0">def </span><span class="s1">initialize(self</span><span class="s0">, </span><span class="s1">plat_name=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s3"># The 'lib' and 'include' variables may be overwritten</span>
+        <span class="s3"># by MSVCCompiler.initialize, so save them for later merge.</span>
+        <span class="s1">environ_lib = os.getenv(</span><span class="s4">'lib'</span><span class="s1">)</span>
+        <span class="s1">environ_include = os.getenv(</span><span class="s4">'include'</span><span class="s1">)</span>
+        <span class="s1">_MSVCCompiler.initialize(self</span><span class="s0">, </span><span class="s1">plat_name)</span>
+
+        <span class="s3"># Merge current and previous values of 'lib' and 'include'</span>
+        <span class="s1">os.environ[</span><span class="s4">'lib'</span><span class="s1">] = _merge(environ_lib</span><span class="s0">, </span><span class="s1">os.environ[</span><span class="s4">'lib'</span><span class="s1">])</span>
+        <span class="s1">os.environ[</span><span class="s4">'include'</span><span class="s1">] = _merge(environ_include</span><span class="s0">, </span><span class="s1">os.environ[</span><span class="s4">'include'</span><span class="s1">])</span>
+
+        <span class="s3"># msvc9 building for 32 bits requires SSE2 to work around a</span>
+        <span class="s3"># compiler bug.</span>
+        <span class="s0">if </span><span class="s1">platform_bits == </span><span class="s5">32</span><span class="s1">:</span>
+            <span class="s1">self.compile_options += [</span><span class="s4">'/arch:SSE2'</span><span class="s1">]</span>
+            <span class="s1">self.compile_options_debug += [</span><span class="s4">'/arch:SSE2'</span><span class="s1">]</span>
+
+    <span class="s0">def </span><span class="s1">manifest_setup_ldargs(self</span><span class="s0">, </span><span class="s1">output_filename</span><span class="s0">, </span><span class="s1">build_temp</span><span class="s0">, </span><span class="s1">ld_args):</span>
+        <span class="s1">ld_args.append(</span><span class="s4">'/MANIFEST'</span><span class="s1">)</span>
+        <span class="s1">_MSVCCompiler.manifest_setup_ldargs(self</span><span class="s0">, </span><span class="s1">output_filename</span><span class="s0">,</span>
+                                            <span class="s1">build_temp</span><span class="s0">, </span><span class="s1">ld_args)</span>
+</pre>
+</body>
+</html>

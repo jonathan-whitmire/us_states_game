@@ -1,0 +1,162 @@
+<html>
+<head>
+<title>unixccompiler.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #808080;}
+.s4 { color: #6897bb;}
+.s5 { color: #6a8759;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+unixccompiler.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+unixccompiler - can handle very long argument lists for ar. 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">subprocess</span>
+
+<span class="s2">from </span><span class="s1">distutils.errors </span><span class="s2">import </span><span class="s1">CompileError</span><span class="s2">, </span><span class="s1">DistutilsExecError</span><span class="s2">, </span><span class="s1">LibError</span>
+<span class="s2">from </span><span class="s1">distutils.unixccompiler </span><span class="s2">import </span><span class="s1">UnixCCompiler</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.ccompiler </span><span class="s2">import </span><span class="s1">replace_method</span>
+<span class="s2">from </span><span class="s1">numpy.distutils.misc_util </span><span class="s2">import </span><span class="s1">_commandline_dep_string</span>
+<span class="s2">from </span><span class="s1">numpy.distutils </span><span class="s2">import </span><span class="s1">log</span>
+
+<span class="s3"># Note that UnixCCompiler._compile appeared in Python 2.3</span>
+<span class="s2">def </span><span class="s1">UnixCCompiler__compile(self</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">, </span><span class="s1">src</span><span class="s2">, </span><span class="s1">ext</span><span class="s2">, </span><span class="s1">cc_args</span><span class="s2">, </span><span class="s1">extra_postargs</span><span class="s2">, </span><span class="s1">pp_opts):</span>
+    <span class="s0">&quot;&quot;&quot;Compile a single source files with a Unix-style compiler.&quot;&quot;&quot;</span>
+    <span class="s3"># HP ad-hoc fix, see ticket 1383</span>
+    <span class="s1">ccomp = self.compiler_so</span>
+    <span class="s2">if </span><span class="s1">ccomp[</span><span class="s4">0</span><span class="s1">] == </span><span class="s5">'aCC'</span><span class="s1">:</span>
+        <span class="s3"># remove flags that will trigger ANSI-C mode for aCC</span>
+        <span class="s2">if </span><span class="s5">'-Ae' </span><span class="s2">in </span><span class="s1">ccomp:</span>
+            <span class="s1">ccomp.remove(</span><span class="s5">'-Ae'</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s5">'-Aa' </span><span class="s2">in </span><span class="s1">ccomp:</span>
+            <span class="s1">ccomp.remove(</span><span class="s5">'-Aa'</span><span class="s1">)</span>
+        <span class="s3"># add flags for (almost) sane C++ handling</span>
+        <span class="s1">ccomp += [</span><span class="s5">'-AA'</span><span class="s1">]</span>
+        <span class="s1">self.compiler_so = ccomp</span>
+    <span class="s3"># ensure OPT environment variable is read</span>
+    <span class="s2">if </span><span class="s5">'OPT' </span><span class="s2">in </span><span class="s1">os.environ:</span>
+        <span class="s3"># XXX who uses this?</span>
+        <span class="s2">from </span><span class="s1">sysconfig </span><span class="s2">import </span><span class="s1">get_config_vars</span>
+        <span class="s1">opt = </span><span class="s5">&quot; &quot;</span><span class="s1">.join(os.environ[</span><span class="s5">'OPT'</span><span class="s1">].split())</span>
+        <span class="s1">gcv_opt = </span><span class="s5">&quot; &quot;</span><span class="s1">.join(get_config_vars(</span><span class="s5">'OPT'</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">].split())</span>
+        <span class="s1">ccomp_s = </span><span class="s5">&quot; &quot;</span><span class="s1">.join(self.compiler_so)</span>
+        <span class="s2">if </span><span class="s1">opt </span><span class="s2">not in </span><span class="s1">ccomp_s:</span>
+            <span class="s1">ccomp_s = ccomp_s.replace(gcv_opt</span><span class="s2">, </span><span class="s1">opt)</span>
+            <span class="s1">self.compiler_so = ccomp_s.split()</span>
+        <span class="s1">llink_s = </span><span class="s5">&quot; &quot;</span><span class="s1">.join(self.linker_so)</span>
+        <span class="s2">if </span><span class="s1">opt </span><span class="s2">not in </span><span class="s1">llink_s:</span>
+            <span class="s1">self.linker_so = llink_s.split() + opt.split()</span>
+
+    <span class="s1">display = </span><span class="s5">'%s: %s' </span><span class="s1">% (os.path.basename(self.compiler_so[</span><span class="s4">0</span><span class="s1">])</span><span class="s2">, </span><span class="s1">src)</span>
+
+    <span class="s3"># gcc style automatic dependencies, outputs a makefile (-MF) that lists</span>
+    <span class="s3"># all headers needed by a c file as a side effect of compilation (-MMD)</span>
+    <span class="s2">if </span><span class="s1">getattr(self</span><span class="s2">, </span><span class="s5">'_auto_depends'</span><span class="s2">, False</span><span class="s1">):</span>
+        <span class="s1">deps = [</span><span class="s5">'-MMD'</span><span class="s2">, </span><span class="s5">'-MF'</span><span class="s2">, </span><span class="s1">obj + </span><span class="s5">'.d'</span><span class="s1">]</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">deps = []</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">self.spawn(self.compiler_so + cc_args + [src</span><span class="s2">, </span><span class="s5">'-o'</span><span class="s2">, </span><span class="s1">obj] + deps +</span>
+                   <span class="s1">extra_postargs</span><span class="s2">, </span><span class="s1">display = display)</span>
+    <span class="s2">except </span><span class="s1">DistutilsExecError </span><span class="s2">as </span><span class="s1">e:</span>
+        <span class="s1">msg = str(e)</span>
+        <span class="s2">raise </span><span class="s1">CompileError(msg)</span>
+
+    <span class="s3"># add commandline flags to dependency file</span>
+    <span class="s2">if </span><span class="s1">deps:</span>
+        <span class="s3"># After running the compiler, the file created will be in EBCDIC</span>
+        <span class="s3"># but will not be tagged as such. This tags it so the file does not</span>
+        <span class="s3"># have multiple different encodings being written to it</span>
+        <span class="s2">if </span><span class="s1">sys.platform == </span><span class="s5">'zos'</span><span class="s1">:</span>
+            <span class="s1">subprocess.check_output([</span><span class="s5">'chtag'</span><span class="s2">, </span><span class="s5">'-tc'</span><span class="s2">, </span><span class="s5">'IBM1047'</span><span class="s2">, </span><span class="s1">obj + </span><span class="s5">'.d'</span><span class="s1">])</span>
+        <span class="s2">with </span><span class="s1">open(obj + </span><span class="s5">'.d'</span><span class="s2">, </span><span class="s5">'a'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s1">f.write(_commandline_dep_string(cc_args</span><span class="s2">, </span><span class="s1">extra_postargs</span><span class="s2">, </span><span class="s1">pp_opts))</span>
+
+<span class="s1">replace_method(UnixCCompiler</span><span class="s2">, </span><span class="s5">'_compile'</span><span class="s2">, </span><span class="s1">UnixCCompiler__compile)</span>
+
+
+<span class="s2">def </span><span class="s1">UnixCCompiler_create_static_lib(self</span><span class="s2">, </span><span class="s1">objects</span><span class="s2">, </span><span class="s1">output_libname</span><span class="s2">,</span>
+                                    <span class="s1">output_dir=</span><span class="s2">None, </span><span class="s1">debug=</span><span class="s4">0</span><span class="s2">, </span><span class="s1">target_lang=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Build a static library in a separate sub-process. 
+ 
+    Parameters 
+    ---------- 
+    objects : list or tuple of str 
+        List of paths to object files used to build the static library. 
+    output_libname : str 
+        The library name as an absolute or relative (if `output_dir` is used) 
+        path. 
+    output_dir : str, optional 
+        The path to the output directory. Default is None, in which case 
+        the ``output_dir`` attribute of the UnixCCompiler instance. 
+    debug : bool, optional 
+        This parameter is not used. 
+    target_lang : str, optional 
+        This parameter is not used. 
+ 
+    Returns 
+    ------- 
+    None 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">objects</span><span class="s2">, </span><span class="s1">output_dir = self._fix_object_args(objects</span><span class="s2">, </span><span class="s1">output_dir)</span>
+
+    <span class="s1">output_filename = \</span>
+                    <span class="s1">self.library_filename(output_libname</span><span class="s2">, </span><span class="s1">output_dir=output_dir)</span>
+
+    <span class="s2">if </span><span class="s1">self._need_link(objects</span><span class="s2">, </span><span class="s1">output_filename):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s3"># previous .a may be screwed up; best to remove it first</span>
+            <span class="s3"># and recreate.</span>
+            <span class="s3"># Also, ar on OS X doesn't handle updating universal archives</span>
+            <span class="s1">os.unlink(output_filename)</span>
+        <span class="s2">except </span><span class="s1">(IOError</span><span class="s2">, </span><span class="s1">OSError):</span>
+            <span class="s2">pass</span>
+        <span class="s1">self.mkpath(os.path.dirname(output_filename))</span>
+        <span class="s1">tmp_objects = objects + self.objects</span>
+        <span class="s2">while </span><span class="s1">tmp_objects:</span>
+            <span class="s1">objects = tmp_objects[:</span><span class="s4">50</span><span class="s1">]</span>
+            <span class="s1">tmp_objects = tmp_objects[</span><span class="s4">50</span><span class="s1">:]</span>
+            <span class="s1">display = </span><span class="s5">'%s: adding %d object files to %s' </span><span class="s1">% (</span>
+                           <span class="s1">os.path.basename(self.archiver[</span><span class="s4">0</span><span class="s1">])</span><span class="s2">,</span>
+                           <span class="s1">len(objects)</span><span class="s2">, </span><span class="s1">output_filename)</span>
+            <span class="s1">self.spawn(self.archiver + [output_filename] + objects</span><span class="s2">,</span>
+                       <span class="s1">display = display)</span>
+
+        <span class="s3"># Not many Unices required ranlib anymore -- SunOS 4.x is, I</span>
+        <span class="s3"># think the only major Unix that does.  Maybe we need some</span>
+        <span class="s3"># platform intelligence here to skip ranlib if it's not</span>
+        <span class="s3"># needed -- or maybe Python's configure script took care of</span>
+        <span class="s3"># it for us, hence the check for leading colon.</span>
+        <span class="s2">if </span><span class="s1">self.ranlib:</span>
+            <span class="s1">display = </span><span class="s5">'%s:@ %s' </span><span class="s1">% (os.path.basename(self.ranlib[</span><span class="s4">0</span><span class="s1">])</span><span class="s2">,</span>
+                                   <span class="s1">output_filename)</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self.spawn(self.ranlib + [output_filename]</span><span class="s2">,</span>
+                           <span class="s1">display = display)</span>
+            <span class="s2">except </span><span class="s1">DistutilsExecError </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s1">msg = str(e)</span>
+                <span class="s2">raise </span><span class="s1">LibError(msg)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">log.debug(</span><span class="s5">&quot;skipping %s (up-to-date)&quot;</span><span class="s2">, </span><span class="s1">output_filename)</span>
+    <span class="s2">return</span>
+
+<span class="s1">replace_method(UnixCCompiler</span><span class="s2">, </span><span class="s5">'create_static_lib'</span><span class="s2">,</span>
+               <span class="s1">UnixCCompiler_create_static_lib)</span>
+</pre>
+</body>
+</html>

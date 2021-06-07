@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>orc.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6a8759;}
+.s4 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+orc.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; orc compat &quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">distutils</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TYPE_CHECKING</span><span class="s2">, </span><span class="s1">List</span><span class="s2">, </span><span class="s1">Optional</span>
+
+<span class="s2">from </span><span class="s1">pandas._typing </span><span class="s2">import </span><span class="s1">FilePathOrBuffer</span>
+
+<span class="s2">from </span><span class="s1">pandas.io.common </span><span class="s2">import </span><span class="s1">get_handle</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING:</span>
+    <span class="s2">from </span><span class="s1">pandas </span><span class="s2">import </span><span class="s1">DataFrame</span>
+
+
+<span class="s2">def </span><span class="s1">read_orc(</span>
+    <span class="s1">path: FilePathOrBuffer</span><span class="s2">, </span><span class="s1">columns: Optional[List[str]] = </span><span class="s2">None, </span><span class="s1">**kwargs</span>
+<span class="s1">) -&gt; </span><span class="s3">&quot;DataFrame&quot;</span><span class="s1">:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Load an ORC object from the file path, returning a DataFrame. 
+ 
+    .. versionadded:: 1.0.0 
+ 
+    Parameters 
+    ---------- 
+    path : str, path object or file-like object 
+        Any valid string path is acceptable. The string could be a URL. Valid 
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is 
+        expected. A local file could be: 
+        ``file://localhost/path/to/table.orc``. 
+ 
+        If you want to pass in a path object, pandas accepts any 
+        ``os.PathLike``. 
+ 
+        By file-like object, we refer to objects with a ``read()`` method, 
+        such as a file handle (e.g. via builtin ``open`` function) 
+        or ``StringIO``. 
+    columns : list, default None 
+        If not None, only these columns will be read from the file. 
+    **kwargs 
+        Any additional kwargs are passed to pyarrow. 
+ 
+    Returns 
+    ------- 
+    DataFrame 
+    &quot;&quot;&quot;</span>
+    <span class="s4"># we require a newer version of pyarrow than we support for parquet</span>
+    <span class="s2">import </span><span class="s1">pyarrow</span>
+
+    <span class="s2">if </span><span class="s1">distutils.version.LooseVersion(pyarrow.__version__) &lt; </span><span class="s3">&quot;0.13.0&quot;</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">ImportError(</span><span class="s3">&quot;pyarrow must be &gt;= 0.13.0 for read_orc&quot;</span><span class="s1">)</span>
+
+    <span class="s2">with </span><span class="s1">get_handle(path</span><span class="s2">, </span><span class="s3">&quot;rb&quot;</span><span class="s2">, </span><span class="s1">is_text=</span><span class="s2">False</span><span class="s1">) </span><span class="s2">as </span><span class="s1">handles:</span>
+        <span class="s1">orc_file = pyarrow.orc.ORCFile(handles.handle)</span>
+        <span class="s2">return </span><span class="s1">orc_file.read(columns=columns</span><span class="s2">, </span><span class="s1">**kwargs).to_pandas()</span>
+</pre>
+</body>
+</html>

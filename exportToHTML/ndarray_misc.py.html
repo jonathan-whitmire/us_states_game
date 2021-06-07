@@ -1,0 +1,172 @@
+<html>
+<head>
+<title>ndarray_misc.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #629755; font-style: italic;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #808080;}
+.s4 { color: #6897bb;}
+.s5 { color: #6a8759;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+ndarray_misc.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Tests for miscellaneous (non-magic) ``np.ndarray``/``np.generic`` methods. 
+ 
+More extensive tests are performed for the methods' 
+function-based counterpart in `../from_numeric.py`. 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">numpy </span><span class="s2">as </span><span class="s1">np</span>
+
+<span class="s2">class </span><span class="s1">SubClass(np.ndarray): ...</span>
+
+<span class="s1">f8: np.float64</span>
+<span class="s1">A: np.ndarray</span>
+<span class="s1">B: SubClass</span>
+
+<span class="s1">reveal_type(f8.all())  </span><span class="s3"># E: numpy.bool_</span>
+<span class="s1">reveal_type(A.all())  </span><span class="s3"># E: numpy.bool_</span>
+<span class="s1">reveal_type(A.all(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.all(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.all(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.any())  </span><span class="s3"># E: numpy.bool_</span>
+<span class="s1">reveal_type(A.any())  </span><span class="s3"># E: numpy.bool_</span>
+<span class="s1">reveal_type(A.any(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.any(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.any(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.argmax())  </span><span class="s3"># E: numpy.signedinteger[Any]</span>
+<span class="s1">reveal_type(A.argmax())  </span><span class="s3"># E: numpy.signedinteger[Any]</span>
+<span class="s1">reveal_type(A.argmax(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.argmax(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.argmin())  </span><span class="s3"># E: numpy.signedinteger[Any]</span>
+<span class="s1">reveal_type(A.argmin())  </span><span class="s3"># E: numpy.signedinteger[Any]</span>
+<span class="s1">reveal_type(A.argmin(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.argmin(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.argsort())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.argsort())  </span><span class="s3"># E: numpy.ndarray</span>
+
+<span class="s1">reveal_type(f8.astype(np.int64).choose([()]))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.choose([</span><span class="s4">0</span><span class="s1">]))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.choose([</span><span class="s4">0</span><span class="s1">]</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.clip(</span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.clip(</span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.clip(</span><span class="s2">None, </span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.clip(</span><span class="s4">1</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+<span class="s1">reveal_type(A.clip(</span><span class="s2">None, </span><span class="s4">1</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.compress([</span><span class="s4">0</span><span class="s1">]))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.compress([</span><span class="s4">0</span><span class="s1">]))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.compress([</span><span class="s4">0</span><span class="s1">]</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.conj())  </span><span class="s3"># E: numpy.floating[numpy.typing._64Bit]</span>
+<span class="s1">reveal_type(A.conj())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(B.conj())  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.conjugate())  </span><span class="s3"># E: numpy.floating[numpy.typing._64Bit]</span>
+<span class="s1">reveal_type(A.conjugate())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(B.conjugate())  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.cumprod())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.cumprod())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.cumprod(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.cumsum())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.cumsum())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.cumsum(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.max())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.max())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.max(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.max(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.max(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.mean())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.mean())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.mean(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.mean(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.mean(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.min())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.min())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.min(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.min(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.min(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.newbyteorder())  </span><span class="s3"># E: numpy.floating[numpy.typing._64Bit]</span>
+<span class="s1">reveal_type(A.newbyteorder())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(B.newbyteorder(</span><span class="s5">'|'</span><span class="s1">))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.prod())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.prod())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.prod(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.prod(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.prod(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.ptp())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.ptp())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.ptp(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.ptp(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.ptp(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.round())  </span><span class="s3"># E: numpy.floating[numpy.typing._64Bit]</span>
+<span class="s1">reveal_type(A.round())  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.round(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.repeat(</span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.repeat(</span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(B.repeat(</span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: numpy.ndarray</span>
+
+<span class="s1">reveal_type(f8.std())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.std())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.std(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.std(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.std(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.sum())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.sum())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.sum(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.sum(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.sum(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.take(</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.take(</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.take([</span><span class="s4">0</span><span class="s1">]))  </span><span class="s3"># E: numpy.ndarray</span>
+<span class="s1">reveal_type(A.take(</span><span class="s4">0</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+<span class="s1">reveal_type(A.take([</span><span class="s4">0</span><span class="s1">]</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(f8.var())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.var())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.var(axis=</span><span class="s4">0</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.var(keepdims=</span><span class="s2">True</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.var(out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(A.argpartition([</span><span class="s4">0</span><span class="s1">]))  </span><span class="s3"># E: numpy.ndarray</span>
+
+<span class="s1">reveal_type(A.diagonal())  </span><span class="s3"># E: numpy.ndarray</span>
+
+<span class="s1">reveal_type(A.dot(</span><span class="s4">1</span><span class="s1">))  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.dot(</span><span class="s4">1</span><span class="s2">, </span><span class="s1">out=B))  </span><span class="s3"># E: SubClass</span>
+
+<span class="s1">reveal_type(A.nonzero())  </span><span class="s3"># E: tuple[numpy.ndarray]</span>
+
+<span class="s1">reveal_type(A.searchsorted([</span><span class="s4">1</span><span class="s1">]))  </span><span class="s3"># E: numpy.ndarray</span>
+
+<span class="s1">reveal_type(A.trace())  </span><span class="s3"># E: Any</span>
+<span class="s1">reveal_type(A.trace(out=B))  </span><span class="s3"># E: SubClass</span>
+</pre>
+</body>
+</html>

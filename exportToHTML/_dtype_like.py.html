@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>_dtype_like.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc7832;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #6897bb;}
+.s3 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_dtype_like.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span><span class="s0">, </span><span class="s1">List</span><span class="s0">, </span><span class="s1">Sequence</span><span class="s0">, </span><span class="s1">Tuple</span><span class="s0">, </span><span class="s1">Union</span><span class="s0">, </span><span class="s1">TYPE_CHECKING</span>
+
+<span class="s0">from </span><span class="s1">numpy </span><span class="s0">import </span><span class="s1">dtype</span>
+<span class="s0">from </span><span class="s1">._shape </span><span class="s0">import </span><span class="s1">_ShapeLike</span>
+
+<span class="s0">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s2">3</span><span class="s0">, </span><span class="s2">8</span><span class="s1">):</span>
+    <span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Protocol</span><span class="s0">, </span><span class="s1">TypedDict</span>
+    <span class="s1">HAVE_PROTOCOL = </span><span class="s0">True</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">try</span><span class="s1">:</span>
+        <span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Protocol</span><span class="s0">, </span><span class="s1">TypedDict</span>
+    <span class="s0">except </span><span class="s1">ImportError:</span>
+        <span class="s1">HAVE_PROTOCOL = </span><span class="s0">False</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">HAVE_PROTOCOL = </span><span class="s0">True</span>
+
+<span class="s1">_DTypeLikeNested = Any  </span><span class="s3"># TODO: wait for support for recursive types</span>
+
+<span class="s0">if </span><span class="s1">TYPE_CHECKING </span><span class="s0">or </span><span class="s1">HAVE_PROTOCOL:</span>
+    <span class="s3"># Mandatory keys</span>
+    <span class="s0">class </span><span class="s1">_DTypeDictBase(TypedDict):</span>
+        <span class="s1">names: Sequence[str]</span>
+        <span class="s1">formats: Sequence[_DTypeLikeNested]</span>
+
+    <span class="s3"># Mandatory + optional keys</span>
+    <span class="s0">class </span><span class="s1">_DTypeDict(_DTypeDictBase</span><span class="s0">, </span><span class="s1">total=</span><span class="s0">False</span><span class="s1">):</span>
+        <span class="s1">offsets: Sequence[int]</span>
+        <span class="s1">titles: Sequence[Any]  </span><span class="s3"># Only `str` elements are usable as indexing aliases, but all objects are legal</span>
+        <span class="s1">itemsize: int</span>
+        <span class="s1">aligned: bool</span>
+
+    <span class="s3"># A protocol for anything with the dtype attribute</span>
+    <span class="s0">class </span><span class="s1">_SupportsDType(Protocol):</span>
+        <span class="s1">dtype: _DTypeLikeNested</span>
+
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s1">_DTypeDict = Any</span>
+    <span class="s1">_SupportsDType = Any</span>
+
+
+<span class="s3"># Would create a dtype[np.void]</span>
+<span class="s1">_VoidDTypeLike = Union[</span>
+    <span class="s3"># (flexible_dtype, itemsize)</span>
+    <span class="s1">Tuple[_DTypeLikeNested</span><span class="s0">, </span><span class="s1">int]</span><span class="s0">,</span>
+    <span class="s3"># (fixed_dtype, shape)</span>
+    <span class="s1">Tuple[_DTypeLikeNested</span><span class="s0">, </span><span class="s1">_ShapeLike]</span><span class="s0">,</span>
+    <span class="s3"># [(field_name, field_dtype, field_shape), ...]</span>
+    <span class="s3">#</span>
+    <span class="s3"># The type here is quite broad because NumPy accepts quite a wide</span>
+    <span class="s3"># range of inputs inside the list; see the tests for some</span>
+    <span class="s3"># examples.</span>
+    <span class="s1">List[Any]</span><span class="s0">,</span>
+    <span class="s3"># {'names': ..., 'formats': ..., 'offsets': ..., 'titles': ...,</span>
+    <span class="s3">#  'itemsize': ...}</span>
+    <span class="s1">_DTypeDict</span><span class="s0">,</span>
+    <span class="s3"># (base_dtype, new_dtype)</span>
+    <span class="s1">Tuple[_DTypeLikeNested</span><span class="s0">, </span><span class="s1">_DTypeLikeNested]</span><span class="s0">,</span>
+<span class="s1">]</span>
+
+<span class="s3"># Anything that can be coerced into numpy.dtype.</span>
+<span class="s3"># Reference: https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html</span>
+<span class="s1">DTypeLike = Union[</span>
+    <span class="s1">dtype</span><span class="s0">,</span>
+    <span class="s3"># default data type (float64)</span>
+    <span class="s0">None,</span>
+    <span class="s3"># array-scalar types and generic types</span>
+    <span class="s1">type</span><span class="s0">,  </span><span class="s3"># TODO: enumerate these when we add type hints for numpy scalars</span>
+    <span class="s3"># anything with a dtype attribute</span>
+    <span class="s1">_SupportsDType</span><span class="s0">,</span>
+    <span class="s3"># character codes, type strings or comma-separated fields, e.g., 'float64'</span>
+    <span class="s1">str</span><span class="s0">,</span>
+    <span class="s1">_VoidDTypeLike</span><span class="s0">,</span>
+<span class="s1">]</span>
+
+<span class="s3"># NOTE: while it is possible to provide the dtype as a dict of</span>
+<span class="s3"># dtype-like objects (e.g. `{'field1': ..., 'field2': ..., ...}`),</span>
+<span class="s3"># this syntax is officially discourged and</span>
+<span class="s3"># therefore not included in the Union defining `DTypeLike`.</span>
+<span class="s3">#</span>
+<span class="s3"># See https://github.com/numpy/numpy/issues/16891 for more details.</span>
+</pre>
+</body>
+</html>
